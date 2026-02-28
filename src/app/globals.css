@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f1f5f9;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --primary: #1e293b;
+  --primary-foreground: #ffffff;
+  --accent: #3b82f6;
+  --destructive: #dc2626;
+  --muted: #94a3b8;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-destructive: var(--destructive);
+  --color-muted: var(--muted);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Urgent marker ping animation */
+@keyframes urgentPing {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  75%, 100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+.urgent-ping {
+  animation: urgentPing 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+/* Custom scrollbar for data table */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 3px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Google Maps info window overrides — prevent scrollbar */
+.gm-style-iw {
+  max-width: 340px !important;
+}
+.gm-style-iw-d {
+  overflow: hidden !important;
+  max-height: none !important;
+}
+.gm-style-iw-c {
+  max-height: none !important;
+  padding: 12px !important;
+}
