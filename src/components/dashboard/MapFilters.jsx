@@ -4,12 +4,19 @@ import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Filter, RotateCcw } from "lucide-react";
 
+const MARKER_OPTIONS = [
+  { value: "all", label: "All" },
+  { value: "urgent", label: "Urgent" },
+  { value: "non-urgent", label: "Non-Urgent" },
+  { value: "resolved", label: "Resolved" },
+];
+
 export default function MapFilters({
   locations,
   filterLocation,
   setFilterLocation,
-  filterUrgentOnly,
-  setFilterUrgentOnly,
+  filterMarker = "all",
+  setFilterMarker,
   onReset,
   urgentCount,
   nonUrgentCount,
@@ -66,17 +73,19 @@ export default function MapFilters({
               ))}
             </Select>
           </div>
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="urgentOnly"
-              checked={filterUrgentOnly}
-              onChange={(e) => setFilterUrgentOnly(e.target.checked)}
-              className="rounded border-slate-300 accent-red-500"
-            />
-            <label htmlFor="urgentOnly" className="text-xs text-slate-600 cursor-pointer">
-              Show urgent only
-            </label>
+          <div>
+            <label className="text-[10px] text-slate-500 uppercase tracking-wide">Markers</label>
+            <Select
+              value={filterMarker}
+              onChange={(e) => setFilterMarker(e.target.value)}
+              className="h-7 text-xs mt-0.5"
+            >
+              {MARKER_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </Select>
           </div>
           <Button
             variant="ghost"

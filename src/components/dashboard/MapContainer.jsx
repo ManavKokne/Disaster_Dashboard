@@ -8,9 +8,18 @@ import {
   OverlayView,
   InfoWindowF,
 } from "@react-google-maps/api";
+import { jitterCoordinates } from "@/lib/coordinate-jitter";
 
-const MAP_CENTER = { lat: 20.5937, lng: 78.9629 };
+const MAP_CENTER = { lat: 22.5, lng: 82.0 };
 const MAP_ZOOM = 5;
+
+// India bounds
+const INDIA_BOUNDS = {
+  north: 37.6,
+  south: 6.7,
+  west: 68.7,
+  east: 97.4,
+};
 
 const mapContainerStyle = {
   width: "100%",
@@ -23,6 +32,11 @@ const mapOptions = {
   streetViewControl: false,
   mapTypeControl: false,
   fullscreenControl: false,
+  restriction: {
+    latLngBounds: INDIA_BOUNDS,
+    strictBounds: false,
+  },
+  minZoom: 4,
 };
 
 function UrgentMarker({ onClick }) {
@@ -69,7 +83,7 @@ export default function MapContainer({
   onResolve,
   onClose,
   filterLocation,
-  filterUrgentOnly,
+  filterMarker = "all",
 }) {
   const { isLoaded } = useJsApiLoader({
     id: "google-map-script",
@@ -88,12 +102,15 @@ export default function MapContainer({
   }, []);
 
   // Filter tweets for map display
-  const filteredTweets = tweets.filter((t) => {
-    if (!t.coordinates) return false;
-    if (filterLocation && t.location.toLowerCase() !== filterLocation.toLowerCase()) return false;
-    if (filterUrgentOnly && t.urgency.toLowerCase() !== "urgent") return false;
-    return true;
-  });
+  const filteredTweets = useMemo(() => {
+    const filtered = tweets.filter((t) => {
+      if (!t.coordinates) return false;
+      if (filterLocation && t.location.toLowerCase() !== filterLocation.toLowerCase()) return false;
+      if (filterMarker !== "all" && t.urgency.toLowerCase() !== filterMarker.toLowerCase()) return false;
+      return true;
+    });
+    return jitterCoordinates(filtered);
+  }, [tweets, filterLocation, filterMarker]);
 
   // Derive selectedTweet from the live tweets array so it stays in sync after resolve
   const selectedTweet = useMemo(
@@ -154,50 +171,102 @@ export default function MapContainer({
         <InfoWindowF
           position={selectedTweet.coordinates}
           onCloseClick={() => setSelectedTweetId(null)}
-          options={{ pixelOffset: new window.google.maps.Size(0, -20), maxWidth: 320 }}
+          options={{ pixelOffset: new window.google.maps.Size(0, -20), maxWidth: 360 }}
         >
-          <div className="p-2" style={{ minWidth: 240, maxWidth: 300, overflow: "visible" }}>
-            <p className="text-sm text-slate-800 font-medium mb-2 leading-snug">
+          <div style={{ minWidth: 260, maxWidth: 330, overflow: "visible", fontFamily: "system-ui, -apple-system, sans-serif" }}>
+            {/* Urgency badge header */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 4,
+                  padding: "3px 10px",
+                  borderRadius: 999,
+                  fontSize: 11,
+                  fontWeight: 600,
+                  letterSpacing: 0.3,
+                  color: "#fff",
+                  background:
+                    selectedTweet.urgency.toLowerCase() === "urgent"
+                      ? "#dc2626"
+                      : selectedTweet.urgency.toLowerCase() === "resolved"
+                      ? "#16a34a"
+                      : "#2563eb",
+                }}
+              >
+                <span style={{ fontSize: 10 }}>
+                  {selectedTweet.urgency.toLowerCase() === "urgent"
+                    ? "\u26A0"
+                    : selectedTweet.urgency.toLowerCase() === "resolved"
+                    ? "\u2714"
+                    : "\u25CF"}
+                </span>
+                {selectedTweet.urgency}
+              </span>
+            </div>
+
+            {/* Tweet text */}
+            <p style={{ fontSize: 13, fontWeight: 500, color: "#1e293b", lineHeight: 1.5, margin: "0 0 12px 0" }}>
               {selectedTweet.tweet}
             </p>
-            <div className="space-y-1 text-xs text-slate-600 mb-3">
-              <p>
-                <span className="font-semibold">Location:</span>{" "}
-                {selectedTweet.location}
-              </p>
-              <p>
-                <span className="font-semibold">Category:</span>{" "}
-                {selectedTweet.request_type}
-              </p>
-              <p>
-                <span className="font-semibold">Urgency:</span>{" "}
-                <span
-                  className={
-                    selectedTweet.urgency.toLowerCase() === "urgent"
-                      ? "text-red-600 font-bold"
-                      : selectedTweet.urgency.toLowerCase() === "resolved"
-                      ? "text-green-600 font-bold"
-                      : "text-blue-600"
-                  }
-                >
-                  {selectedTweet.urgency}
-                </span>
-              </p>
+
+            {/* Meta grid */}
+            <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "6px 12px", fontSize: 12, color: "#475569", marginBottom: 14 }}>
+              <span style={{ fontWeight: 600, color: "#64748b" }}>Location</span>
+              <span>{selectedTweet.location}</span>
+              <span style={{ fontWeight: 600, color: "#64748b" }}>Category</span>
+              <span>{selectedTweet.request_type}</span>
             </div>
-            <div className="flex gap-2">
+
+            {/* Divider */}
+            <div style={{ height: 1, background: "#e2e8f0", margin: "0 0 12px 0" }} />
+
+            {/* Action buttons */}
+            <div style={{ display: "flex", gap: 8 }}>
               {selectedTweet.urgency.toLowerCase() === "urgent" && (
                 <button
                   onClick={() => handleResolve(selectedTweet)}
-                  className="px-3 py-1.5 bg-green-600 text-white text-xs rounded-md hover:bg-green-700 transition-colors cursor-pointer"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 5,
+                    padding: "6px 14px",
+                    background: "#16a34a",
+                    color: "#fff",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    borderRadius: 6,
+                    border: "none",
+                    cursor: "pointer",
+                    transition: "background 0.15s",
+                  }}
+                  onMouseOver={(e) => (e.currentTarget.style.background = "#15803d")}
+                  onMouseOut={(e) => (e.currentTarget.style.background = "#16a34a")}
                 >
-                  ✓ Resolved
+                  Mark Resolved
                 </button>
               )}
               <button
                 onClick={() => handleClose(selectedTweet)}
-                className="px-3 py-1.5 bg-slate-600 text-white text-xs rounded-md hover:bg-slate-700 transition-colors cursor-pointer"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                  padding: "6px 14px",
+                  background: "#f1f5f9",
+                  color: "#475569",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  borderRadius: 6,
+                  border: "1px solid #e2e8f0",
+                  cursor: "pointer",
+                  transition: "background 0.15s",
+                }}
+                onMouseOver={(e) => (e.currentTarget.style.background = "#e2e8f0")}
+                onMouseOut={(e) => (e.currentTarget.style.background = "#f1f5f9")}
               >
-                ✕ Close
+                Close
               </button>
             </div>
           </div>

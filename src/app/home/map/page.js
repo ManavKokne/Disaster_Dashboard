@@ -19,7 +19,7 @@ export default function MapPage() {
   const [tweets, setTweets] = useState([]);
   const [closedIds, setClosedIds] = useState(new Set());
   const [filterLocation, setFilterLocation] = useState("");
-  const [filterUrgentOnly, setFilterUrgentOnly] = useState(false);
+  const [filterMarker, setFilterMarker] = useState("all");
 
   const { data, error, isLoading } = useSWR("/api/tweets", fetcher, {
     revalidateOnFocus: false,
@@ -84,10 +84,10 @@ export default function MapPage() {
     return activeTweets.filter((t) => {
       if (!t.coordinates) return false;
       if (filterLocation && t.location.toLowerCase() !== filterLocation.toLowerCase()) return false;
-      if (filterUrgentOnly && t.urgency.toLowerCase() !== "urgent") return false;
+      if (filterMarker !== "all" && t.urgency.toLowerCase() !== filterMarker.toLowerCase()) return false;
       return true;
     });
-  }, [activeTweets, filterLocation, filterUrgentOnly]);
+  }, [activeTweets, filterLocation, filterMarker]);
 
   const urgentCount = mapTweets.filter((t) => t.urgency.toLowerCase() === "urgent").length;
   const nonUrgentCount = mapTweets.filter((t) => t.urgency.toLowerCase() === "non-urgent").length;
@@ -104,12 +104,12 @@ export default function MapPage() {
   if (!user) return null;
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-[var(--background)]">
+    <div className="h-screen flex flex-col bg-[var(--background)]">
       <Navbar />
 
-      <div className="flex-1 flex p-3 gap-3 overflow-hidden">
-        {/* Full Map */}
-        <Card className="flex-1 overflow-hidden">
+      <div className="flex-1 flex flex-col lg:flex-row p-3 gap-3 overflow-y-auto">
+        {/* Map - constrained height */}
+        <Card className="flex-1 overflow-hidden min-h-[300px] max-h-[60vh] lg:max-h-none">
           <CardContent className="p-0 h-full">
             {isLoading ? (
               <div className="w-full h-full flex items-center justify-center">
@@ -125,24 +125,24 @@ export default function MapPage() {
                 onResolve={handleResolve}
                 onClose={handleClose}
                 filterLocation={filterLocation}
-                filterUrgentOnly={filterUrgentOnly}
+                filterMarker={filterMarker}
               />
             )}
           </CardContent>
         </Card>
 
-        {/* Sidebar Filters */}
-        <Card className="w-[200px] flex-shrink-0 overflow-y-auto hidden lg:block">
+        {/* Sidebar: Legend + Filters */}
+        <Card className="w-full lg:w-[220px] flex-shrink-0 overflow-y-auto">
           <CardContent className="p-0">
             <MapFilters
               locations={locations}
               filterLocation={filterLocation}
               setFilterLocation={setFilterLocation}
-              filterUrgentOnly={filterUrgentOnly}
-              setFilterUrgentOnly={setFilterUrgentOnly}
+              filterMarker={filterMarker}
+              setFilterMarker={setFilterMarker}
               onReset={() => {
                 setFilterLocation("");
-                setFilterUrgentOnly(false);
+                setFilterMarker("all");
               }}
               urgentCount={urgentCount}
               nonUrgentCount={nonUrgentCount}

@@ -63,9 +63,9 @@ body {
   background: #94a3b8;
 }
 
-/* Google Maps info window overrides — prevent scrollbar */
+/* Google Maps info window overrides */
 .gm-style-iw {
-  max-width: 340px !important;
+  max-width: 380px !important;
 }
 .gm-style-iw-d {
   overflow: hidden !important;
@@ -73,5 +73,14 @@ body {
 }
 .gm-style-iw-c {
   max-height: none !important;
-  padding: 12px !important;
+  padding: 14px 16px !important;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06) !important;
+}
+.gm-style-iw-tc::after {
+  background: white !important;
+}
+/* Hide default close button — we use our own dismiss */
+.gm-style-iw-chr {
+  display: none !important;
 }
