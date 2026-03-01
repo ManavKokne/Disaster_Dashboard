@@ -23,14 +23,14 @@ export async function sendAlertEmail(type, tweetData) {
   }
 
   const subjects = {
-    urgent: `🚨 URGENT: New disaster post detected - ${tweetData.location}`,
-    resolved: `✅ RESOLVED: Urgent post marked resolved - ${tweetData.location}`,
-    closed: `🔒 CLOSED: Post removed from dashboard - ${tweetData.location}`,
+    urgent: `URGENT: New disaster post detected - ${tweetData.location}`,
+    resolved: `RESOLVED: Urgent post marked resolved - ${tweetData.location}`,
+    closed: `CLOSED: Post removed from dashboard - ${tweetData.location}`,
   };
 
   const bodies = {
     urgent: `
-      <h2 style="color: #dc2626;">⚠️ New Urgent Disaster Post Detected</h2>
+      <h2 style="color: #dc2626;">New Urgent Disaster Post Detected</h2>
       <table style="border-collapse:collapse; width:100%; max-width:600px;">
         <tr><td style="padding:8px; border:1px solid #ddd; font-weight:bold;">Tweet</td><td style="padding:8px; border:1px solid #ddd;">${tweetData.tweet}</td></tr>
         <tr><td style="padding:8px; border:1px solid #ddd; font-weight:bold;">Location</td><td style="padding:8px; border:1px solid #ddd;">${tweetData.location}</td></tr>
@@ -40,7 +40,7 @@ export async function sendAlertEmail(type, tweetData) {
       <p>Please review this post on the dashboard immediately.</p>
     `,
     resolved: `
-      <h2 style="color: #16a34a;">✅ Urgent Post Marked as Resolved</h2>
+      <h2 style="color: #16a34a;">Urgent Post Marked as Resolved</h2>
       <table style="border-collapse:collapse; width:100%; max-width:600px;">
         <tr><td style="padding:8px; border:1px solid #ddd; font-weight:bold;">Tweet</td><td style="padding:8px; border:1px solid #ddd;">${tweetData.tweet}</td></tr>
         <tr><td style="padding:8px; border:1px solid #ddd; font-weight:bold;">Location</td><td style="padding:8px; border:1px solid #ddd;">${tweetData.location}</td></tr>
@@ -49,7 +49,7 @@ export async function sendAlertEmail(type, tweetData) {
       <p>This post has been resolved by an operator.</p>
     `,
     closed: `
-      <h2 style="color: #6b7280;">🔒 Post Closed / Removed</h2>
+      <h2 style="color: #6b7280;">Post Closed / Removed</h2>
       <table style="border-collapse:collapse; width:100%; max-width:600px;">
         <tr><td style="padding:8px; border:1px solid #ddd; font-weight:bold;">Tweet</td><td style="padding:8px; border:1px solid #ddd;">${tweetData.tweet}</td></tr>
         <tr><td style="padding:8px; border:1px solid #ddd; font-weight:bold;">Location</td><td style="padding:8px; border:1px solid #ddd;">${tweetData.location}</td></tr>
