@@ -68,6 +68,7 @@ export default function MapContainer({
   tweets,
   onResolve,
   onClose,
+  onAcknowledge,
   filterLocation,
   filterUrgentOnly,
 }) {
@@ -132,7 +133,7 @@ export default function MapContainer({
       {filteredTweets.map((tweet) => {
         const urgencyLower = tweet.urgency.toLowerCase();
         const isUrgent = urgencyLower === "urgent";
-        const isResolved = urgencyLower === "resolved";
+        const isResolved = Boolean(tweet.is_resolved) || urgencyLower === "resolved";
         return (
           <OverlayViewF
             key={tweet.id}
@@ -173,19 +174,19 @@ export default function MapContainer({
                 <span className="font-semibold">Urgency:</span>{" "}
                 <span
                   className={
-                    selectedTweet.urgency.toLowerCase() === "urgent"
+                    (selectedTweet.urgency || "").toLowerCase() === "urgent"
                       ? "text-red-600 font-bold"
-                      : selectedTweet.urgency.toLowerCase() === "resolved"
+                      : (selectedTweet.is_resolved || (selectedTweet.urgency || "").toLowerCase() === "resolved")
                       ? "text-green-600 font-bold"
                       : "text-blue-600"
                   }
                 >
-                  {selectedTweet.urgency}
+                  {selectedTweet.is_resolved ? "resolved" : selectedTweet.urgency}
                 </span>
               </p>
             </div>
             <div className="flex gap-2">
-              {selectedTweet.urgency.toLowerCase() === "urgent" && (
+              {(selectedTweet.urgency || "").toLowerCase() === "urgent" && !selectedTweet.is_resolved && (
                 <button
                   onClick={() => handleResolve(selectedTweet)}
                   className="px-3 py-1.5 bg-green-600 text-white text-xs rounded-md hover:bg-green-700 transition-colors cursor-pointer"
@@ -193,6 +194,12 @@ export default function MapContainer({
                   ✓ Resolved
                 </button>
               )}
+              <button
+                onClick={() => onAcknowledge?.(selectedTweet.id)}
+                className="px-3 py-1.5 bg-amber-600 text-white text-xs rounded-md hover:bg-amber-700 transition-colors cursor-pointer"
+              >
+                🔇 Acknowledge
+              </button>
               <button
                 onClick={() => handleClose(selectedTweet)}
                 className="px-3 py-1.5 bg-slate-600 text-white text-xs rounded-md hover:bg-slate-700 transition-colors cursor-pointer"

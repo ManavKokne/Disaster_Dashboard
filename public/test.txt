@@ -1,0 +1,62 @@
+-- Create and select the database
+CREATE DATABASE IF NOT EXISTS disaster;
+USE disaster;
+
+-- Create the tweets table with lifecycle tracking
+CREATE TABLE IF NOT EXISTS tweets (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    content TEXT NOT NULL,
+    location VARCHAR(255) NOT NULL,
+    request_type VARCHAR(100) DEFAULT NULL,
+    urgency ENUM('urgent', 'non-urgent') NOT NULL,
+    is_resolved BOOLEAN NOT NULL DEFAULT FALSE,
+    resolved_at DATETIME NULL,
+    is_closed BOOLEAN NOT NULL DEFAULT FALSE,
+    closed_at DATETIME NULL,
+    timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    INDEX idx_active_polling (is_closed, timestamp),
+    INDEX idx_urgency (urgency)
+);
+
+-- Completely clear the table for a fresh start
+TRUNCATE TABLE tweets;
+
+-- Insert Non-Urgent Entries (Initial State)
+INSERT INTO tweets (content, location, request_type, urgency) VALUES 
+('Medical emergency reported in Bhopal. Need Medical.', 'Bhopal', 'Medical', 'non-urgent'),
+('Looking for volunteers in Bhubaneswar for Food & Supplies help.', 'Bhubaneswar', 'Food & Supplies', 'non-urgent'),
+('Looking for volunteers in Guwahati for Humanitarian help.', 'Guwahati', 'Humanitarian', 'non-urgent');
+
+-- Insert Urgent Entries (Simulate Alert)
+INSERT INTO tweets (content, location, request_type, urgency) VALUES 
+('Supplies running low in Mysuru, need Humanitarian.', 'Mysuru', 'Humanitarian', 'urgent'),
+('Requesting Humanitarian support in Bhubaneswar. Please help.', 'Bhubaneswar', 'Humanitarian', 'urgent');
+
+
+
+NON Urgent
+INSERT INTO tweets (content, location, request_type, urgency) VALUES 
+('Medical emergency reported in Bhopal. Need Medical.', 'Bhopal', 'Medical', 'non-urgent'),
+('Looking for volunteers in Bhubaneswar for Food & Supplies help.', 'Bhubaneswar', 'Food & Supplies', 'non-urgent'),
+('Looking for volunteers in Guwahati for Humanitarian help.', 'Guwahati', 'Humanitarian', 'non-urgent'),
+('Medical emergency reported in Goa. Need Medical.', 'Goa', 'Medical', 'non-urgent'),
+('Senior citizens need Food & Supplies assistance in Hyderabad.', 'Hyderabad', 'Food & Supplies', 'non-urgent'),
+('Family stranded in Aizawl, require Medical.', 'Aizawl', 'Medical', 'non-urgent'),
+('Supplies running low in Chennai, need Medical.', 'Chennai', 'Medical', 'non-urgent'),
+('Requesting Medical support in Kolkata. Please help.', 'Kolkata', 'Medical', 'non-urgent'),
+('Children in Mumbai require urgent Humanitarian support.', 'Mumbai', 'Humanitarian', 'non-urgent'),
+('Need immediate assistance in Bengaluru. Situation critical.', 'Bengaluru', 'Medical', 'non-urgent');
+
+Urgent
+INSERT INTO tweets (content, location, request_type, urgency) VALUES 
+('Supplies running low in Mysuru, need Humanitarian.', 'Mysuru', 'Humanitarian', 'urgent'),
+('Requesting Humanitarian support in Bhubaneswar. Please help.', 'Bhubaneswar', 'Humanitarian', 'urgent'),
+('Requesting Food & Supplies support in Bhubaneswar. Please help.', 'Bhubaneswar', 'Food & Supplies', 'urgent'),
+('Children in Noida require urgent Food & Supplies support.', 'Noida', 'Food & Supplies', 'urgent'),
+('Senior citizens need Humanitarian assistance in Pune.', 'Pune', 'Humanitarian', 'urgent'),
+('Family stranded in Itanagar, require Humanitarian.', 'Itanagar', 'Humanitarian', 'urgent'),
+('Supplies running low in Vadodara, need Food & Supplies.', 'Vadodara', 'Food & Supplies', 'urgent'),
+('Looking for volunteers in Jammu for Food & Supplies help.', 'Jammu', 'Food & Supplies', 'urgent'),
+('Senior citizens need Medical assistance in Mumbai.', 'Mumbai', 'Medical', 'urgent'),
+('Looking for volunteers in Srinagar for Food & Supplies help.', 'Srinagar', 'Food & Supplies', 'urgent');

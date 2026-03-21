@@ -105,18 +105,19 @@ export default function DataListTable({ tweets, locations, requestTypes }) {
         ),
         size: 120,
         cell: ({ row }) => {
-          const urgency = row.original.urgency.toLowerCase();
+          const urgency = (row.original.urgency || "").toLowerCase();
+          const isResolved = Boolean(row.original.is_resolved);
           return (
             <Badge
               variant={
-                urgency === "urgent"
-                  ? "destructive"
-                  : urgency === "resolved"
+                isResolved
                   ? "success"
+                  : urgency === "urgent"
+                  ? "destructive"
                   : "outline"
               }
             >
-              {row.original.urgency}
+              {isResolved ? "resolved" : row.original.urgency}
             </Badge>
           );
         },
@@ -130,7 +131,13 @@ export default function DataListTable({ tweets, locations, requestTypes }) {
     return tweets.filter((t) => {
       if (locationFilter && t.location.toLowerCase() !== locationFilter.toLowerCase()) return false;
       if (categoryFilter && t.request_type !== categoryFilter) return false;
-      if (urgencyFilter && t.urgency.toLowerCase() !== urgencyFilter.toLowerCase()) return false;
+      if (urgencyFilter) {
+        if (urgencyFilter.toLowerCase() === "resolved") {
+          if (!t.is_resolved) return false;
+        } else if ((t.urgency || "").toLowerCase() !== urgencyFilter.toLowerCase()) {
+          return false;
+        }
+      }
       return true;
     });
   }, [tweets, locationFilter, categoryFilter, urgencyFilter]);
