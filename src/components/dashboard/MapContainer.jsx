@@ -112,6 +112,18 @@ export default function MapContainer({
     setSelectedTweetId(null);
   };
 
+  const hideInfoWindowCloseButton = useCallback(() => {
+    // Google injects the close control dynamically, so hide it after mount.
+    requestAnimationFrame(() => {
+      const closeButtons = document.querySelectorAll(".gm-style-iw button.gm-ui-hover-effect");
+      closeButtons.forEach((button) => {
+        button.style.display = "none";
+        button.setAttribute("aria-hidden", "true");
+        button.setAttribute("tabindex", "-1");
+      });
+    });
+  }, []);
+
   if (!isLoaded) {
     return (
       <div className="w-full h-full flex items-center justify-center bg-slate-100 rounded-lg">
@@ -155,57 +167,69 @@ export default function MapContainer({
         <InfoWindowF
           position={selectedTweet.coordinates}
           onCloseClick={() => setSelectedTweetId(null)}
+          onDomReady={hideInfoWindowCloseButton}
           options={{ pixelOffset: new window.google.maps.Size(0, -20), maxWidth: 320 }}
         >
-          <div className="p-2" style={{ minWidth: 240, maxWidth: 300, overflow: "visible" }}>
-            <p className="text-sm text-slate-800 font-medium mb-2 leading-snug">
-              {selectedTweet.tweet}
-            </p>
-            <div className="space-y-1 text-xs text-slate-600 mb-3">
-              <p>
-                <span className="font-semibold">Location:</span>{" "}
-                {selectedTweet.location}
-              </p>
-              <p>
-                <span className="font-semibold">Category:</span>{" "}
-                {selectedTweet.request_type}
-              </p>
-              <p>
-                <span className="font-semibold">Urgency:</span>{" "}
-                <span
-                  className={
-                    (selectedTweet.urgency || "").toLowerCase() === "urgent"
-                      ? "text-red-600 font-bold"
-                      : (selectedTweet.is_resolved || (selectedTweet.urgency || "").toLowerCase() === "resolved")
-                      ? "text-green-600 font-bold"
-                      : "text-blue-600"
-                  }
-                >
-                  {selectedTweet.is_resolved ? "resolved" : selectedTweet.urgency}
-                </span>
-              </p>
-            </div>
-            <div className="flex gap-2">
-              {(selectedTweet.urgency || "").toLowerCase() === "urgent" && !selectedTweet.is_resolved && (
+          <div style={{ minWidth: 260, maxWidth: 320, overflow: "visible" }}>
+            <div className="rounded-lg border border-slate-200 bg-white">
+              <div className="px-3 py-2 border-b border-slate-200 bg-slate-50 rounded-t-lg">
+                <h4 className="text-sm font-semibold text-slate-800">Incident Alert</h4>
+                <p className="text-[11px] text-slate-500">Operator Action Panel</p>
+              </div>
+
+              <div className="px-3 py-2.5 space-y-2">
+                <p className="text-sm text-slate-800 font-medium leading-snug">
+                  {selectedTweet.tweet || selectedTweet.content}
+                </p>
+
+                <div className="grid grid-cols-[70px_1fr] gap-y-1 text-xs">
+                  <span className="font-semibold text-slate-600">Location</span>
+                  <span className="text-slate-700">{selectedTweet.location}</span>
+
+                  <span className="font-semibold text-slate-600">Category</span>
+                  <span className="text-slate-700">{selectedTweet.request_type || "N/A"}</span>
+
+                  <span className="font-semibold text-slate-600">Urgency</span>
+                  <span
+                    className={
+                      (selectedTweet.urgency || "").toLowerCase() === "urgent" && !selectedTweet.is_resolved
+                        ? "text-red-600 font-semibold"
+                        : selectedTweet.is_resolved
+                        ? "text-green-600 font-semibold"
+                        : "text-blue-600 font-semibold"
+                    }
+                  >
+                    {selectedTweet.is_resolved ? "resolved" : selectedTweet.urgency}
+                  </span>
+                </div>
+              </div>
+
+              <div className="px-3 py-2.5 border-t border-slate-200 flex flex-wrap gap-2 rounded-b-lg bg-white">
+                {(selectedTweet.urgency || "").toLowerCase() === "urgent" && !selectedTweet.is_resolved && (
+                  <button
+                    onClick={() => handleResolve(selectedTweet)}
+                    className="px-3 py-1.5 bg-green-600 text-white text-xs rounded-md hover:bg-green-700 transition-colors cursor-pointer"
+                  >
+                    Resolved
+                  </button>
+                )}
+
+                {(selectedTweet.urgency || "").toLowerCase() === "urgent" && !selectedTweet.is_resolved && !selectedTweet.is_acknowledged && (
+                  <button
+                    onClick={() => onAcknowledge?.(selectedTweet.id)}
+                    className="px-3 py-1.5 bg-amber-600 text-white text-xs rounded-md hover:bg-amber-700 transition-colors cursor-pointer"
+                  >
+                    Acknowledge
+                  </button>
+                )}
+
                 <button
-                  onClick={() => handleResolve(selectedTweet)}
-                  className="px-3 py-1.5 bg-green-600 text-white text-xs rounded-md hover:bg-green-700 transition-colors cursor-pointer"
+                  onClick={() => handleClose(selectedTweet)}
+                  className="px-3 py-1.5 bg-slate-600 text-white text-xs rounded-md hover:bg-slate-700 transition-colors cursor-pointer"
                 >
-                  ✓ Resolved
+                  Close
                 </button>
-              )}
-              <button
-                onClick={() => onAcknowledge?.(selectedTweet.id)}
-                className="px-3 py-1.5 bg-amber-600 text-white text-xs rounded-md hover:bg-amber-700 transition-colors cursor-pointer"
-              >
-                🔇 Acknowledge
-              </button>
-              <button
-                onClick={() => handleClose(selectedTweet)}
-                className="px-3 py-1.5 bg-slate-600 text-white text-xs rounded-md hover:bg-slate-700 transition-colors cursor-pointer"
-              >
-                ✕ Close
-              </button>
+              </div>
             </div>
           </div>
         </InfoWindowF>

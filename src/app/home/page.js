@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import Navbar from "@/components/dashboard/Navbar";
@@ -10,29 +10,16 @@ import DataListTable from "@/components/dashboard/DataListTable";
 import MapFilters from "@/components/dashboard/MapFilters";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
-
-const POLL_INTERVAL_MS = 5000;
-const SOUND_SESSION_KEY = "dashboard_sound_notifications_enabled";
+import useDashboardAlerts from "@/hooks/useDashboardAlerts";
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
-  const [tweets, setTweets] = useState([]);
-  const [loadingData, setLoadingData] = useState(true);
-  const [loadError, setLoadError] = useState("");
   const [toasts, setToasts] = useState([]);
-  const [showSoundPrompt, setShowSoundPrompt] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(false);
 
   const [filterLocation, setFilterLocation] = useState("");
   const [filterUrgentOnly, setFilterUrgentOnly] = useState(false);
-
-  const lastFetchedRef = useRef("");
-  const firstFetchDoneRef = useRef(false);
-  const seenIdsRef = useRef(new Set());
-  const alertAudioRef = useRef(null);
-  const resolveTimeoutsRef = useRef(new Map());
 
   const pushToast = useCallback((message, tone = "info") => {
     const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -42,244 +29,24 @@ export default function DashboardPage() {
     }, 3500);
   }, []);
 
-  const stopAlertAudio = useCallback(() => {
-    if (alertAudioRef.current) {
-      alertAudioRef.current.pause();
-      alertAudioRef.current.currentTime = 0;
-    }
-  }, []);
-
-  const playAlertAudio = useCallback(() => {
-    if (!soundEnabled) return;
-    if (!alertAudioRef.current) {
-      const audio = new Audio("/sounds/alert.mp3");
-      audio.loop = true;
-      alertAudioRef.current = audio;
-    }
-    alertAudioRef.current.play().catch(() => setShowSoundPrompt(true));
-  }, [soundEnabled]);
-
-  const enableSoundNotifications = useCallback(async () => {
-    try {
-      if (!alertAudioRef.current) {
-        const audio = new Audio("/sounds/alert.mp3");
-        audio.loop = true;
-        alertAudioRef.current = audio;
-      }
-      await alertAudioRef.current.play();
-      alertAudioRef.current.pause();
-      alertAudioRef.current.currentTime = 0;
-      setSoundEnabled(true);
-      sessionStorage.setItem(SOUND_SESSION_KEY, "true");
-      setShowSoundPrompt(false);
-      pushToast("Sound notifications enabled", "success");
-    } catch {
-      pushToast("Browser blocked audio. Click again to allow sound.", "error");
-    }
-  }, [pushToast]);
-
   useEffect(() => {
     if (!authLoading && !user) {
       router.replace("/login");
     }
   }, [user, authLoading, router]);
-
-  useEffect(() => {
-    if (!user) return;
-    const enabled = sessionStorage.getItem(SOUND_SESSION_KEY) === "true";
-    setSoundEnabled(enabled);
-    setShowSoundPrompt(!enabled);
-  }, [user]);
-
-  const sendAlert = useCallback(async (type, tweetData) => {
-    try {
-      await fetch("/api/send-alert", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type, tweetData }),
-      });
-    } catch (err) {
-      console.error("Failed to send alert:", err);
-    }
-  }, []);
-
-  const updateTweet = useCallback(async (id, action) => {
-    const res = await fetch("/api/tweets", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, action }),
-    });
-
-    if (!res.ok) {
-      const payload = await res.json().catch(() => ({}));
-      throw new Error(payload.error || "Status update failed");
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!user) return;
-
-    let isMounted = true;
-
-    const updateLastFetched = (rows) => {
-      if (!rows?.length) return;
-      for (const row of rows) {
-        if (row.timestamp && (!lastFetchedRef.current || row.timestamp > lastFetchedRef.current)) {
-          lastFetchedRef.current = row.timestamp;
-        }
-      }
-    };
-
-    const mergeTweets = (prev, incoming) => {
-      const map = new Map(prev.map((item) => [item.id, item]));
-      incoming.forEach((item) => {
-        map.set(item.id, item);
-      });
-      return Array.from(map.values());
-    };
-
-    const poll = async () => {
-      try {
-        const sinceQuery = lastFetchedRef.current
-          ? `?since=${encodeURIComponent(lastFetchedRef.current)}`
-          : "";
-        const res = await fetch(`/api/tweets${sinceQuery}`);
-        if (!res.ok) throw new Error("Failed to fetch tweets");
-
-        const payload = await res.json();
-        const incoming = payload.tweets || [];
-
-        if (!isMounted) return;
-
-        if (!firstFetchDoneRef.current) {
-          firstFetchDoneRef.current = true;
-          setTweets(incoming);
-          incoming.forEach((item) => seenIdsRef.current.add(item.id));
-          updateLastFetched(incoming);
-          setLoadingData(false);
-          setLoadError("");
-          return;
-        }
-
-        const newRecords = incoming.filter((item) => !seenIdsRef.current.has(item.id));
-
-        if (incoming.length > 0) {
-          setTweets((prev) => mergeTweets(prev, incoming));
-          incoming.forEach((item) => seenIdsRef.current.add(item.id));
-          updateLastFetched(incoming);
-        }
-
-        const newUrgent = newRecords.filter(
-          (item) => (item.urgency || "").toLowerCase() === "urgent" && !item.is_resolved && !item.is_closed
-        );
-
-        if (newUrgent.length > 0) {
-          newUrgent.forEach((tweet) => {
-            sendAlert("urgent", tweet);
-            pushToast(`New urgent alert: ${tweet.location}`, "error");
-          });
-          playAlertAudio();
-        }
-
-        setLoadError("");
-      } catch (error) {
-        if (!isMounted) return;
-        console.error("Polling failed:", error);
-        setLoadError("Failed to load data");
-        setLoadingData(false);
-      }
-    };
-
-    poll();
-    const intervalId = setInterval(poll, POLL_INTERVAL_MS);
-
-    return () => {
-      isMounted = false;
-      clearInterval(intervalId);
-    };
-  }, [playAlertAudio, pushToast, sendAlert, user]);
-
-  useEffect(() => {
-    const timeoutMap = resolveTimeoutsRef.current;
-    return () => {
-      stopAlertAudio();
-      timeoutMap.forEach((timeoutId) => clearTimeout(timeoutId));
-      timeoutMap.clear();
-    };
-  }, [stopAlertAudio]);
-
-  const handleResolve = useCallback(
-    async (tweetId) => {
-      const tweet = tweets.find((t) => t.id === tweetId);
-      setTweets((prev) =>
-        prev.map((t) => (t.id === tweetId ? { ...t, is_resolved: true } : t))
-      );
-
-      try {
-        await updateTweet(tweetId, "resolve");
-        if (tweet) sendAlert("resolved", tweet);
-        pushToast("Alert marked as resolved", "success");
-
-        const timeoutId = setTimeout(async () => {
-          try {
-            await updateTweet(tweetId, "close");
-            setTweets((prev) => prev.filter((t) => t.id !== tweetId));
-            pushToast("Resolved alert auto-closed after 5 minutes", "info");
-          } catch (error) {
-            console.error("Auto-close fallback failed:", error);
-          }
-        }, 5 * 60 * 1000);
-
-        const existing = resolveTimeoutsRef.current.get(tweetId);
-        if (existing) clearTimeout(existing);
-        resolveTimeoutsRef.current.set(tweetId, timeoutId);
-      } catch (error) {
-        console.error("Resolve failed:", error);
-        pushToast("Failed to mark alert as resolved", "error");
-      }
-    },
-    [pushToast, sendAlert, tweets, updateTweet]
-  );
-
-  const handleClose = useCallback(
-    async (tweetId) => {
-      const tweet = tweets.find((t) => t.id === tweetId);
-      setTweets((prev) => prev.filter((t) => t.id !== tweetId));
-      stopAlertAudio();
-
-      const timeoutId = resolveTimeoutsRef.current.get(tweetId);
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        resolveTimeoutsRef.current.delete(tweetId);
-      }
-
-      try {
-        await updateTweet(tweetId, "close");
-        if (tweet) sendAlert("closed", tweet);
-      } catch (error) {
-        console.error("Close failed:", error);
-        pushToast("Failed to close alert", "error");
-      }
-    },
-    [pushToast, sendAlert, stopAlertAudio, tweets, updateTweet]
-  );
-
-  const handleAcknowledge = useCallback(() => {
-    stopAlertAudio();
-    pushToast("Alert sound muted", "info");
-  }, [pushToast, stopAlertAudio]);
-
-  const activeTweets = useMemo(() => tweets.filter((t) => !t.is_closed), [tweets]);
-
-  const locations = useMemo(() => {
-    const set = new Set(activeTweets.map((t) => t.location).filter(Boolean));
-    return [...set].sort();
-  }, [activeTweets]);
-
-  const requestTypes = useMemo(() => {
-    const set = new Set(activeTweets.map((t) => t.request_type).filter(Boolean));
-    return [...set].sort();
-  }, [activeTweets]);
+  const {
+    loadingData,
+    loadError,
+    showSoundPrompt,
+    setShowSoundPrompt,
+    enableSoundNotifications,
+    handleResolve,
+    handleClose,
+    handleAcknowledge,
+    activeTweets,
+    locations,
+    requestTypes,
+  } = useDashboardAlerts({ user, onToast: pushToast });
 
   const mapTweets = useMemo(() => {
     return activeTweets.filter((t) => {
