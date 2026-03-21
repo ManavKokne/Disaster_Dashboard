@@ -9,14 +9,28 @@ CREATE TABLE IF NOT EXISTS tweets (
     location VARCHAR(255) NOT NULL,
     request_type VARCHAR(100) DEFAULT NULL,
     urgency ENUM('urgent', 'non-urgent') NOT NULL,
+
+    -- Status fields
+    is_acknowledged BOOLEAN NOT NULL DEFAULT FALSE,
     is_resolved BOOLEAN NOT NULL DEFAULT FALSE,
     resolved_at DATETIME NULL,
     is_closed BOOLEAN NOT NULL DEFAULT FALSE,
     closed_at DATETIME NULL,
-    timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    -- Geolocation fields (filled by async worker)
+    latitude DECIMAL(10,8) NULL,
+    longitude DECIMAL(11,8) NULL,
+    geocode_status ENUM('pending', 'done', 'failed') NOT NULL DEFAULT 'pending',
+
+    -- Audit timestamps
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
     PRIMARY KEY (id),
-    INDEX idx_active_polling (is_closed, timestamp),
-    INDEX idx_urgency (urgency)
+    INDEX idx_active_polling (is_closed, created_at),
+    INDEX idx_urgency (urgency),
+    INDEX idx_geocode (geocode_status),
+    INDEX idx_location (latitude, longitude)
 );
 
 -- Completely clear the table for a fresh start

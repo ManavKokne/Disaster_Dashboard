@@ -24,7 +24,6 @@ export default function useDashboardAlerts({ user, onToast } = {}) {
   const [showSoundPrompt, setShowSoundPrompt] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(false);
 
-  const lastFetchedRef = useRef("");
   const firstFetchDoneRef = useRef(false);
   const seenIdsRef = useRef(new Set());
   const alertAudioRef = useRef(null);
@@ -114,25 +113,9 @@ export default function useDashboardAlerts({ user, onToast } = {}) {
 
     let isMounted = true;
 
-    const updateLastFetched = (rows) => {
-      if (!rows?.length) return;
-      for (const row of rows) {
-        if (
-          row.timestamp &&
-          (!lastFetchedRef.current || row.timestamp > lastFetchedRef.current)
-        ) {
-          lastFetchedRef.current = row.timestamp;
-        }
-      }
-    };
-
     const poll = async () => {
       try {
-        const sinceQuery = lastFetchedRef.current
-          ? `?since=${encodeURIComponent(lastFetchedRef.current)}`
-          : "";
-
-        const response = await fetch(`/api/tweets${sinceQuery}`);
+        const response = await fetch("/api/tweets");
         if (!response.ok) {
           throw new Error("Failed to fetch tweets");
         }
@@ -146,7 +129,6 @@ export default function useDashboardAlerts({ user, onToast } = {}) {
           firstFetchDoneRef.current = true;
           setTweets(incoming);
           incoming.forEach((item) => seenIdsRef.current.add(item.id));
-          updateLastFetched(incoming);
           setLoadingData(false);
           setLoadError("");
           return;
@@ -164,7 +146,6 @@ export default function useDashboardAlerts({ user, onToast } = {}) {
           });
 
           incoming.forEach((item) => seenIdsRef.current.add(item.id));
-          updateLastFetched(incoming);
         }
 
         const newUrgent = newRecords.filter(
@@ -294,15 +275,28 @@ export default function useDashboardAlerts({ user, onToast } = {}) {
   );
 
   const handleAcknowledge = useCallback(
-    (tweetId) => {
+    async (tweetId) => {
       setTweets((previous) =>
         previous.map((item) =>
           item.id === tweetId ? { ...item, is_acknowledged: true } : item
         )
       );
-      notify("Alert acknowledged", "info");
+      
+      try {
+        await updateTweet(tweetId, "acknowledge");
+        notify("Alert acknowledged", "success");
+      } catch (error) {
+        console.error("Acknowledge failed:", error);
+        notify("Failed to acknowledge alert", "error");
+        // Revert the optimistic update
+        setTweets((previous) =>
+          previous.map((item) =>
+            item.id === tweetId ? { ...item, is_acknowledged: false } : item
+          )
+        );
+      }
     },
-    [notify]
+    [notify, updateTweet]
   );
 
   const activeTweets = useMemo(

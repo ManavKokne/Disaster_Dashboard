@@ -2,13 +2,14 @@
 
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
-import { LogOut, Activity, LayoutDashboard, Map } from "lucide-react";
+import { LogOut, Activity, LayoutDashboard, Map, BarChart3 } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
 const NAV_TABS = [
   { label: "Summary", href: "/home", icon: LayoutDashboard },
   { label: "Map", href: "/home/map", icon: Map },
+  { label: "Charts", href: "/home/charts", icon: BarChart3 },
 ];
 
 export default function Navbar() {

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import {
   fetchTweets,
-  fetchCityCoordinates,
   updateTweetStatus,
   autoCloseResolvedTweets,
 } from "@/lib/data-fetcher";
@@ -13,29 +12,15 @@ export async function GET(request) {
 
     await autoCloseResolvedTweets();
 
-    const [tweets, cities] = await Promise.all([
-      fetchTweets({ since }),
-      fetchCityCoordinates(),
-    ]);
+    const tweets = await fetchTweets({ since });
 
-    // Build a coordinate lookup map from city coordinates
-    const coordMap = {};
-    cities.forEach((c) => {
-      coordMap[c.city.trim().toLowerCase()] = {
-        lat: parseFloat(c.latitude),
-        lng: parseFloat(c.longitude),
-      };
-    });
-
-    // Attach coordinates to each tweet
-    const tweetsWithCoords = tweets.map((tweet) => {
-      const locKey = tweet.location.trim().toLowerCase();
-      const coords = coordMap[locKey] || null;
-      return {
-        ...tweet,
-        coordinates: coords,
-      };
-    });
+    const tweetsWithCoords = tweets.map((tweet) => ({
+      ...tweet,
+      coordinates:
+        Number.isFinite(tweet.latitude) && Number.isFinite(tweet.longitude)
+          ? { lat: tweet.latitude, lng: tweet.longitude }
+          : null,
+    }));
 
     return NextResponse.json({
       tweets: tweetsWithCoords,
@@ -56,9 +41,9 @@ export async function PATCH(request) {
     const id = Number(body?.id);
     const action = body?.action;
 
-    if (!id || !["resolve", "close"].includes(action)) {
+    if (!id || !["resolve", "close", "acknowledge"].includes(action)) {
       return NextResponse.json(
-        { error: "Invalid payload. Required: id and action(resolve|close)" },
+        { error: "Invalid payload. Required: id and action(resolve|close|acknowledge)" },
         { status: 400 }
       );
     }

@@ -122,6 +122,21 @@ export default function DataListTable({ tweets, locations, requestTypes }) {
           );
         },
       },
+      {
+        accessorKey: "is_acknowledged",
+        header: "Acknowledged",
+        size: 110,
+        cell: ({ row }) => {
+          const isAcknowledged = Boolean(row.original.is_acknowledged);
+          return (
+            <Badge
+              variant={isAcknowledged ? "success" : "outline"}
+            >
+              {isAcknowledged ? "Yes" : "No"}
+            </Badge>
+          );
+        },
+      },
     ],
     []
   );

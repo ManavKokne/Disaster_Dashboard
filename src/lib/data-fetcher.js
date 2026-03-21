@@ -4,6 +4,7 @@ import Papa from "papaparse";
 import mysql from "mysql2/promise";
 
 const CSV_DIR = path.join(process.cwd(), "public");
+const GEOCODE_API_URL = "https://maps.googleapis.com/maps/api/geocode/json";
 let dbPool;
 
 function getDbPool() {
@@ -35,6 +36,11 @@ function getDbPool() {
 }
 
 function normalizeTweetRow(row) {
+  const latitude = row.latitude == null ? null : Number(row.latitude);
+  const longitude = row.longitude == null ? null : Number(row.longitude);
+  const createdAt = row.created_at || null;
+  const updatedAt = row.updated_at || null;
+
   return {
     id: row.id,
     tweet: row.tweet || row.content || "",
@@ -43,7 +49,12 @@ function normalizeTweetRow(row) {
     urgency: row.urgency || "non-urgent",
     is_resolved: Boolean(row.is_resolved),
     is_closed: Boolean(row.is_closed),
-    timestamp: row.timestamp ? new Date(row.timestamp).toISOString() : null,
+    is_acknowledged: Boolean(row.is_acknowledged),
+    latitude: Number.isFinite(latitude) ? latitude : null,
+    longitude: Number.isFinite(longitude) ? longitude : null,
+    geocode_status: row.geocode_status || null,
+    created_at: createdAt ? new Date(createdAt).toISOString() : null,
+    updated_at: updatedAt ? new Date(updatedAt).toISOString() : null,
     resolved_at: row.resolved_at ? new Date(row.resolved_at).toISOString() : null,
     closed_at: row.closed_at ? new Date(row.closed_at).toISOString() : null,
   };
@@ -58,56 +69,72 @@ async function fetchTweetsFromSql({ since } = {}) {
   const baseConditions = ["is_closed = 0"];
   const params = [];
   if (since) {
-    baseConditions.push("timestamp > ?");
+    baseConditions.push("created_at > ?");
     params.push(since);
   }
 
   const whereSql = `WHERE ${baseConditions.join(" AND ")}`;
 
-  const queryWithContent = `
-    SELECT
-      id,
-      content AS tweet,
-      location,
-      request_type,
-      urgency,
-      is_resolved,
-      is_closed,
-      timestamp,
-      resolved_at,
-      closed_at
-    FROM tweets
-    ${whereSql}
-    ORDER BY timestamp ASC
-  `;
+  const queries = [
+    `
+      SELECT
+        id,
+        content AS tweet,
+        location,
+        request_type,
+        urgency,
+        is_resolved,
+        is_closed,
+        is_acknowledged,
+        latitude,
+        longitude,
+        geocode_status,
+        created_at,
+        updated_at,
+        resolved_at,
+        closed_at
+      FROM tweets
+      ${whereSql}
+      ORDER BY created_at ASC
+    `,
+    `
+      SELECT
+        id,
+        tweet,
+        location,
+        request_type,
+        urgency,
+        is_resolved,
+        is_closed,
+        is_acknowledged,
+        latitude,
+        longitude,
+        geocode_status,
+        created_at,
+        updated_at,
+        resolved_at,
+        closed_at
+      FROM tweets
+      ${whereSql}
+      ORDER BY created_at ASC
+    `,
+  ];
 
-  const queryWithTweet = `
-    SELECT
-      id,
-      tweet,
-      location,
-      request_type,
-      urgency,
-      is_resolved,
-      is_closed,
-      timestamp,
-      resolved_at,
-      closed_at
-    FROM tweets
-    ${whereSql}
-    ORDER BY timestamp ASC
-  `;
+  let lastError = null;
 
-  try {
-    const [rows] = await pool.query(queryWithContent, params);
-    return rows.map(normalizeTweetRow);
-  } catch (error) {
-    if (error?.code !== "ER_BAD_FIELD_ERROR") {
-      throw error;
+  for (const query of queries) {
+    try {
+      const [rows] = await pool.query(query, params);
+      return rows.map(normalizeTweetRow);
+    } catch (error) {
+      lastError = error;
+      if (error?.code !== "ER_BAD_FIELD_ERROR") {
+        throw error;
+      }
     }
-    const [rows] = await pool.query(queryWithTweet, params);
-    return rows.map(normalizeTweetRow);
   }
+
+  throw lastError || new Error("Unable to fetch tweets");
 }
 
 async function fetchTweetsFromCsv({ since } = {}) {
@@ -129,9 +156,14 @@ async function fetchTweetsFromCsv({ since } = {}) {
     location: row.location || "",
     request_type: row.request_type || "",
     urgency: (row.urgency || "non-urgent").trim().toLowerCase(),
+    is_acknowledged: false,
     is_resolved: false,
     is_closed: false,
-    timestamp: null,
+    latitude: null,
+    longitude: null,
+    geocode_status: null,
+    created_at: null,
+    updated_at: null,
     resolved_at: null,
     closed_at: null,
   }));
@@ -150,14 +182,162 @@ export async function fetchTweets(options = {}) {
   return fetchTweetsFromCsv(options);
 }
 
-export async function fetchCityCoordinates() {
-  const csvPath = path.join(CSV_DIR, "india_city_coordinates.csv");
-  const csvContent = fs.readFileSync(csvPath, "utf-8");
-  const { data } = Papa.parse(csvContent, {
-    header: true,
-    skipEmptyLines: true,
+async function geocodeLocationWithGoogle(location) {
+  const apiKey =
+    process.env.GOOGLE_MAPS_GEOCODING_API_KEY ||
+    process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+  if (!apiKey || !location) {
+    return null;
+  }
+
+  const params = new URLSearchParams({
+    address: location,
+    key: apiKey,
+    region: "in",
   });
-  return data;
+
+  const response = await fetch(`${GEOCODE_API_URL}?${params.toString()}`, {
+    method: "GET",
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Geocoding API failed with status ${response.status}`);
+  }
+
+  const payload = await response.json();
+  const first = payload?.results?.[0]?.geometry?.location;
+
+  if (!first) return null;
+
+  return {
+    latitude: Number(first.lat),
+    longitude: Number(first.lng),
+  };
+}
+
+export async function processPendingGeocodes(limit = 10) {
+  const pool = getDbPool();
+  if (!pool) {
+    return { success: false, message: "SQL not configured", processed: 0 };
+  }
+
+  const parsedLimit = Math.max(1, Math.min(Number(limit) || 10, 100));
+
+  const queryWithStatus = `
+    SELECT id, location
+    FROM tweets
+    WHERE location IS NOT NULL
+      AND location <> ''
+      AND latitude IS NULL
+      AND geocode_status = 'pending'
+    ORDER BY id ASC
+    LIMIT ?
+  `;
+
+  const queryWithoutStatus = `
+    SELECT id, location
+    FROM tweets
+    WHERE location IS NOT NULL
+      AND location <> ''
+      AND latitude IS NULL
+    ORDER BY id ASC
+    LIMIT ?
+  `;
+
+  let rows = [];
+  let hasStatusColumn = true;
+
+  try {
+    const [resultRows] = await pool.query(queryWithStatus, [parsedLimit]);
+    rows = resultRows;
+  } catch (error) {
+    if (error?.code !== "ER_BAD_FIELD_ERROR") throw error;
+    hasStatusColumn = false;
+    try {
+      const [resultRows] = await pool.query(queryWithoutStatus, [parsedLimit]);
+      rows = resultRows;
+    } catch (fallbackError) {
+      if (fallbackError?.code === "ER_BAD_FIELD_ERROR") {
+        return {
+          success: false,
+          message:
+            "Missing latitude/longitude columns. Apply the latest tweets table migration first.",
+          processed: 0,
+        };
+      }
+      throw fallbackError;
+    }
+  }
+
+  let processed = 0;
+  let success = 0;
+  let failed = 0;
+
+  for (const row of rows) {
+    processed += 1;
+
+    try {
+      const coords = await geocodeLocationWithGoogle(row.location);
+
+      if (coords) {
+        if (hasStatusColumn) {
+          await pool.query(
+            `
+            UPDATE tweets
+            SET latitude = ?, longitude = ?, geocode_status = 'done'
+            WHERE id = ?
+            `,
+            [coords.latitude, coords.longitude, row.id]
+          );
+        } else {
+          await pool.query(
+            `
+            UPDATE tweets
+            SET latitude = ?, longitude = ?
+            WHERE id = ?
+            `,
+            [coords.latitude, coords.longitude, row.id]
+          );
+        }
+        success += 1;
+      } else {
+        if (hasStatusColumn) {
+          await pool.query(
+            `
+            UPDATE tweets
+            SET geocode_status = 'failed'
+            WHERE id = ?
+            `,
+            [row.id]
+          );
+        }
+        failed += 1;
+      }
+    } catch (error) {
+      if (hasStatusColumn) {
+        await pool.query(
+          `
+          UPDATE tweets
+          SET geocode_status = 'failed'
+          WHERE id = ?
+          `,
+          [row.id]
+        );
+      }
+      failed += 1;
+      console.error(`Geocode failed for tweet ${row.id}:`, error.message);
+    }
+  }
+
+  return {
+    success: true,
+    processed,
+    geocoded: success,
+    failed,
+    statusColumnEnabled: hasStatusColumn,
+  };
 }
 
 export async function updateTweetStatus(id, action) {
@@ -166,7 +346,7 @@ export async function updateTweetStatus(id, action) {
     return { success: false, message: "SQL not configured" };
   }
 
-  if (!id || !["resolve", "close"].includes(action)) {
+  if (!id || !["resolve", "close", "acknowledge"].includes(action)) {
     return { success: false, message: "Invalid update payload" };
   }
 
@@ -191,6 +371,23 @@ export async function updateTweetStatus(id, action) {
           `,
           [id]
         );
+      }
+    }
+
+    if (action === "acknowledge") {
+      try {
+        await pool.query(
+          `
+          UPDATE tweets
+          SET is_acknowledged = 1
+          WHERE id = ?
+          `,
+          [id]
+        );
+      } catch (error) {
+        if (error?.code !== "ER_BAD_FIELD_ERROR") throw error;
+        // Column might not exist yet, just return success
+        console.warn("is_acknowledged column not found, consider running database migration");
       }
     }
 
@@ -252,7 +449,7 @@ export async function autoCloseResolvedTweets() {
         SET is_closed = 1
         WHERE is_resolved = 1
           AND is_closed = 0
-          AND timestamp <= (NOW() - INTERVAL 5 MINUTE)
+          AND created_at <= (NOW() - INTERVAL 5 MINUTE)
         `
       );
     } catch (fallbackError) {

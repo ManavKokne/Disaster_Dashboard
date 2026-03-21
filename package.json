@@ -4,9 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:local": "node scripts/dev-with-geocode.mjs",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "worker:geocode": "node scripts/geocode-scheduler.mjs"
   },
   "dependencies": {
     "@react-google-maps/api": "^2.20.8",

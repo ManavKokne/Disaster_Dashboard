@@ -89,12 +89,14 @@ export default function MapContainer({
   }, []);
 
   // Filter tweets for map display
-  const filteredTweets = tweets.filter((t) => {
-    if (!t.coordinates) return false;
-    if (filterLocation && t.location.toLowerCase() !== filterLocation.toLowerCase()) return false;
-    if (filterUrgentOnly && t.urgency.toLowerCase() !== "urgent") return false;
-    return true;
-  });
+  const filteredTweets = useMemo(() => {
+    return tweets.filter((t) => {
+      if (!t.coordinates) return false;
+      if (filterLocation && t.location.toLowerCase() !== filterLocation.toLowerCase()) return false;
+      if (filterUrgentOnly && ((t.urgency || "").toLowerCase() !== "urgent" || t.is_resolved)) return false;
+      return true;
+    });
+  }, [tweets, filterLocation, filterUrgentOnly]);
 
   // Derive selectedTweet from the live tweets array so it stays in sync after resolve
   const selectedTweet = useMemo(
@@ -143,7 +145,7 @@ export default function MapContainer({
       onClick={() => setSelectedTweetId(null)}
     >
       {filteredTweets.map((tweet) => {
-        const urgencyLower = tweet.urgency.toLowerCase();
+        const urgencyLower = (tweet.urgency || "").toLowerCase();
         const isUrgent = urgencyLower === "urgent";
         const isResolved = Boolean(tweet.is_resolved) || urgencyLower === "resolved";
         return (
@@ -205,7 +207,7 @@ export default function MapContainer({
               </div>
 
               <div className="px-3 py-2.5 border-t border-slate-200 flex flex-wrap gap-2 rounded-b-lg bg-white">
-                {(selectedTweet.urgency || "").toLowerCase() === "urgent" && !selectedTweet.is_resolved && (
+                {!selectedTweet.is_resolved && (
                   <button
                     onClick={() => handleResolve(selectedTweet)}
                     className="px-3 py-1.5 bg-green-600 text-white text-xs rounded-md hover:bg-green-700 transition-colors cursor-pointer"
