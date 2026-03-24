@@ -17,6 +17,7 @@ export default function DashboardPage() {
   const router = useRouter();
 
   const [toasts, setToasts] = useState([]);
+  const [mobileView, setMobileView] = useState("map"); // "map" or "chart" for mobile
 
   const [filterLocation, setFilterLocation] = useState("");
   const [filterUrgentOnly, setFilterUrgentOnly] = useState(false);
@@ -121,7 +122,8 @@ export default function DashboardPage() {
       </div>
 
       <div className="flex-1 flex flex-col p-3 gap-3 overflow-hidden">
-        <div className="grid grid-cols-1 lg:grid-cols-10 gap-3 flex-1 min-h-0">
+        {/* Desktop: Side-by-side layout */}
+        <div className="hidden lg:grid lg:grid-cols-10 gap-3 flex-1 min-h-0">
           <Card className="lg:col-span-6 overflow-hidden">
             <CardContent className="p-0 h-full flex">
               <div className="flex-1 min-w-0">
@@ -144,7 +146,7 @@ export default function DashboardPage() {
                   />
                 )}
               </div>
-              <div className="w-[180px] border-l border-slate-200 bg-slate-50 flex-shrink-0 overflow-y-auto hidden lg:block">
+              <div className="w-45 border-l border-slate-200 bg-slate-50 shrink-0 overflow-y-auto hidden lg:block">
                 <MapFilters
                   locations={locations}
                   filterLocation={filterLocation}
@@ -177,29 +179,101 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        <div className="lg:hidden">
-          <Card>
-            <CardContent className="p-2">
-              <MapFilters
-                locations={locations}
-                filterLocation={filterLocation}
-                setFilterLocation={setFilterLocation}
-                filterUrgentOnly={filterUrgentOnly}
-                setFilterUrgentOnly={setFilterUrgentOnly}
-                onReset={() => {
-                  setFilterLocation("");
-                  setFilterUrgentOnly(false);
-                }}
-                urgentCount={urgentCount}
-                nonUrgentCount={nonUrgentCount}
-                resolvedCount={resolvedCount}
-                totalVisible={mapTweets.length}
-              />
-            </CardContent>
-          </Card>
+        {/* Mobile/Tablet: Switching layout */}
+        <div className="lg:hidden flex flex-col flex-1 min-h-0 gap-2">
+          {/* View Switcher Buttons */}
+          <div className="flex gap-2 bg-white rounded-lg p-2 border border-slate-200 shrink-0">
+            <button
+              onClick={() => setMobileView("map")}
+              className={`flex-1 px-3 py-2 rounded-md text-xs font-medium transition-colors ${
+                mobileView === "map"
+                  ? "bg-slate-900 text-white"
+                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+              }`}
+            >
+              Map View
+            </button>
+            <button
+              onClick={() => setMobileView("chart")}
+              className={`flex-1 px-3 py-2 rounded-md text-xs font-medium transition-colors ${
+                mobileView === "chart"
+                  ? "bg-slate-900 text-white"
+                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+              }`}
+            >
+              Chart View
+            </button>
+          </div>
+
+          {/* Map View */}
+          {mobileView === "map" && (
+            <>
+              <Card className="flex-1 overflow-hidden min-h-0">
+                <CardContent className="p-0 h-full min-h-64 sm:min-h-96">
+                  {loadingData ? (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+                    </div>
+                  ) : loadError ? (
+                    <div className="w-full h-full flex items-center justify-center text-red-500 text-sm">
+                      {loadError}
+                    </div>
+                  ) : (
+                    <MapContainer
+                      tweets={activeTweets}
+                      onResolve={handleResolve}
+                      onClose={handleClose}
+                      onAcknowledge={handleAcknowledge}
+                      filterLocation={filterLocation}
+                      filterUrgentOnly={filterUrgentOnly}
+                    />
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Mobile Filters for Map */}
+              <Card className="shrink-0">
+                <CardContent className="p-2 max-h-40 overflow-y-auto">
+                  <MapFilters
+                    locations={locations}
+                    filterLocation={filterLocation}
+                    setFilterLocation={setFilterLocation}
+                    filterUrgentOnly={filterUrgentOnly}
+                    setFilterUrgentOnly={setFilterUrgentOnly}
+                    onReset={() => {
+                      setFilterLocation("");
+                      setFilterUrgentOnly(false);
+                    }}
+                    urgentCount={urgentCount}
+                    nonUrgentCount={nonUrgentCount}
+                    resolvedCount={resolvedCount}
+                    totalVisible={mapTweets.length}
+                  />
+                </CardContent>
+              </Card>
+            </>
+          )}
+
+          {/* Chart View */}
+          {mobileView === "chart" && (
+            <Card className="flex-1 overflow-hidden min-h-0">
+              <CardContent className="p-4 h-full">
+                {loadingData ? (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+                  </div>
+                ) : (
+                  <div style={{ height: "100%" }}>
+                    <AnalyticsChart tweets={activeTweets} />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </div>
 
-        <Card className="flex-1 min-h-[240px] overflow-hidden">
+        {/* Data Table - Visible on all sizes */}
+        <Card className="flex-1 min-h-45 sm:min-h-55 md:min-h-60 overflow-hidden">
           <CardContent className="p-0 h-full">
             {loadingData ? (
               <div className="w-full h-full flex items-center justify-center">

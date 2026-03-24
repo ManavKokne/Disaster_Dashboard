@@ -7,7 +7,7 @@ import Navbar from "@/components/dashboard/Navbar";
 import MapContainer from "@/components/dashboard/MapContainer";
 import MapFilters from "@/components/dashboard/MapFilters";
 import { Card, CardContent } from "@/components/ui/card";
-import { Loader2 } from "lucide-react";
+import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import useDashboardAlerts from "@/hooks/useDashboardAlerts";
 
 export default function MapPage() {
@@ -16,6 +16,7 @@ export default function MapPage() {
 
   const [filterLocation, setFilterLocation] = useState("");
   const [filterUrgentOnly, setFilterUrgentOnly] = useState(false);
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -84,8 +85,8 @@ export default function MapPage() {
         </div>
       )}
 
-      <div className="flex-1 flex p-3 gap-3 overflow-hidden">
-        {/* Full Map */}
+      <div className="flex-1 flex flex-col lg:flex-row p-3 gap-3 overflow-hidden">
+        {/* Map Container - Full width on mobile, 1fr on desktop */}
         <Card className="flex-1 overflow-hidden">
           <CardContent className="p-0 h-full">
             {loadingData ? (
@@ -109,8 +110,8 @@ export default function MapPage() {
           </CardContent>
         </Card>
 
-        {/* Sidebar Filters */}
-        <Card className="w-[200px] flex-shrink-0 overflow-y-auto hidden lg:block">
+        {/* Desktop Sidebar Filters - Visible always on lg screens */}
+        <Card className="w-50 shrink-0 overflow-y-auto hidden lg:block">
           <CardContent className="p-0">
             <MapFilters
               locations={locations}
@@ -129,6 +130,44 @@ export default function MapPage() {
             />
           </CardContent>
         </Card>
+      </div>
+
+      {/* Mobile Filter Toggle - Visible only on small screens */}
+      <div className="px-3 pb-3 lg:hidden">
+        <button
+          onClick={() => setShowMobileFilters(!showMobileFilters)}
+          className="w-full flex items-center justify-between px-4 py-2.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 transition-colors"
+        >
+          <span className="text-sm font-medium text-slate-700">Filters</span>
+          {showMobileFilters ? (
+            <ChevronUp className="h-4 w-4 text-slate-500" />
+          ) : (
+            <ChevronDown className="h-4 w-4 text-slate-500" />
+          )}
+        </button>
+
+        {/* Mobile Filters Panel */}
+        {showMobileFilters && (
+          <Card className="mt-2 overflow-hidden">
+            <CardContent className="p-0">
+              <MapFilters
+                locations={locations}
+                filterLocation={filterLocation}
+                setFilterLocation={setFilterLocation}
+                filterUrgentOnly={filterUrgentOnly}
+                setFilterUrgentOnly={setFilterUrgentOnly}
+                onReset={() => {
+                  setFilterLocation("");
+                  setFilterUrgentOnly(false);
+                }}
+                urgentCount={urgentCount}
+                nonUrgentCount={nonUrgentCount}
+                resolvedCount={resolvedCount}
+                totalVisible={mapTweets.length}
+              />
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

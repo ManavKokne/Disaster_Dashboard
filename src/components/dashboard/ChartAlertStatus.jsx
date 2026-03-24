@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   Chart as ChartJS,
   ArcElement,
@@ -12,6 +12,15 @@ import { Pie } from "react-chartjs-2";
 ChartJS.register(ArcElement, Tooltip, Legend);
 
 export default function ChartAlertStatus({ tweets }) {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
   const chartData = useMemo(() => {
     let active = 0;
     let resolved = 0;
@@ -36,10 +45,10 @@ export default function ChartAlertStatus({ tweets }) {
         {
           data: [active, acknowledged, resolved, closed],
           backgroundColor: [
-            "rgba(239, 68, 68, 0.8)",     // red - active
-            "rgba(234, 179, 8, 0.8)",     // amber - acknowledged
-            "rgba(34, 197, 94, 0.8)",     // green - resolved
-            "rgba(100, 116, 139, 0.8)",   // gray - closed
+            "rgba(239, 68, 68, 0.8)",
+            "rgba(234, 179, 8, 0.8)",
+            "rgba(34, 197, 94, 0.8)",
+            "rgba(100, 116, 139, 0.8)",
           ],
           borderColor: [
             "rgba(239, 68, 68, 1)",
@@ -59,27 +68,29 @@ export default function ChartAlertStatus({ tweets }) {
     plugins: {
       legend: {
         display: true,
-        position: "right",
+        position: isMobile ? "bottom" : "right",
         labels: {
-          font: { size: 12 },
+          font: { size: isMobile ? 11 : 12, weight: "500" },
           color: "#64748b",
-          padding: 15,
+          padding: isMobile ? 10 : 15,
           usePointStyle: true,
+          pointStyle: "circle",
+          boxWidth: isMobile ? 10 : 12,
         },
       },
       title: {
         display: true,
         text: "Alert Status Distribution",
-        font: { size: 14, weight: "600" },
+        font: { size: isMobile ? 13 : 14, weight: "600" },
         color: "#1e293b",
         padding: { bottom: 12 },
       },
       tooltip: {
         backgroundColor: "#1e293b",
-        titleFont: { size: 12 },
-        bodyFont: { size: 11 },
+        titleFont: { size: 11 },
+        bodyFont: { size: 10 },
         cornerRadius: 6,
-        padding: 10,
+        padding: 8,
         callbacks: {
           label: (ctx) => {
             const label = ctx.label || "";

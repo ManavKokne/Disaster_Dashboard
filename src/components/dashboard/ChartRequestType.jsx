@@ -101,7 +101,6 @@ export default function ChartRequestType({ tweets }) {
           color: "#64748b",
           font: { size: 11 },
           beginAtZero: true,
-          stepSize: 1,
         },
         title: {
           display: true,

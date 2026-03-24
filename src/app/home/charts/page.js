@@ -66,20 +66,20 @@ export default function ChartsPage() {
       <Navbar />
 
       <div className="flex-1 flex flex-col p-3 gap-3 overflow-hidden">
-        <div className="flex items-center justify-between px-1">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-1 gap-3">
           <h1 className="text-lg font-bold text-slate-800">Analytics Dashboard</h1>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full sm:w-auto">
             <Select
               value={timelineMode}
               onChange={(e) => setTimelineMode(e.target.value)}
-              className="w-52 h-8 text-xs"
+              className="w-full sm:w-52 h-8 text-xs"
             >
               <option value="cumulative">Timeline: Cumulative</option>
               <option value="24h">Timeline: Last 24 Hours</option>
             </Select>
             {tweets.length > 0 && (
-              <span className="text-xs text-slate-500">
-                {tweets.filter((t) => !t.is_closed).length} of {tweets.length} active alerts
+              <span className="text-xs text-slate-500 whitespace-nowrap">
+                {tweets.filter((t) => !t.is_closed).length} of {tweets.length} active
               </span>
             )}
           </div>
@@ -98,11 +98,11 @@ export default function ChartsPage() {
             No data available
           </div>
         ) : (
-          <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-3 overflow-hidden">
+          <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3 overflow-auto">
             {/* Request Type Chart */}
             <Card className="overflow-hidden">
               <CardContent className="p-4 h-full">
-                <div className="w-full h-full relative" style={{ minHeight: "400px" }}>
+                <div style={{ height: "400px" }}>
                   <ChartRequestType tweets={tweets} />
                 </div>
               </CardContent>
@@ -111,7 +111,7 @@ export default function ChartsPage() {
             {/* Alert Timeline Chart */}
             <Card className="overflow-hidden">
               <CardContent className="p-4 h-full">
-                <div className="w-full h-full relative" style={{ minHeight: "400px" }}>
+                <div style={{ height: "400px" }}>
                   <ChartAlertTimeline tweets={tweets} mode={timelineMode} />
                 </div>
               </CardContent>
@@ -120,7 +120,7 @@ export default function ChartsPage() {
             {/* Alert Status Chart */}
             <Card className="overflow-hidden">
               <CardContent className="p-4 h-full">
-                <div className="w-full h-full relative" style={{ minHeight: "400px" }}>
+                <div style={{ height: "400px" }}>
                   <ChartAlertStatus tweets={tweets} />
                 </div>
               </CardContent>
@@ -129,7 +129,7 @@ export default function ChartsPage() {
             {/* Urgency Distribution Chart */}
             <Card className="overflow-hidden">
               <CardContent className="p-4 h-full">
-                <div className="w-full h-full relative" style={{ minHeight: "400px" }}>
+                <div style={{ height: "400px" }}>
                   <ChartUrgencyDistribution tweets={tweets} />
                 </div>
               </CardContent>

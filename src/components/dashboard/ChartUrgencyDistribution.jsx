@@ -70,7 +70,7 @@ export default function ChartUrgencyDistribution({ tweets }) {
         labels: {
           font: { size: 12 },
           color: "#64748b",
-          padding: 12,
+          padding: 15,
         },
       },
       title: {
@@ -98,7 +98,6 @@ export default function ChartUrgencyDistribution({ tweets }) {
           color: "#64748b",
           font: { size: 11 },
           beginAtZero: true,
-          stepSize: 1,
         },
         title: {
           display: true,
