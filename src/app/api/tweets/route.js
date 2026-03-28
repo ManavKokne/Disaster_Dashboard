@@ -1,41 +1,66 @@
 import { NextResponse } from "next/server";
-import { fetchTweets, fetchCityCoordinates } from "@/lib/data-fetcher";
+import {
+  fetchTweets,
+  updateTweetStatus,
+  autoCloseResolvedTweets,
+} from "@/lib/data-fetcher";
 
-export async function GET() {
+export async function GET(request) {
   try {
-    const [tweets, cities] = await Promise.all([
-      fetchTweets(),
-      fetchCityCoordinates(),
-    ]);
+    const { searchParams } = new URL(request.url);
+    const since = searchParams.get("since") || undefined;
 
-    // Build a coordinate lookup map from city coordinates
-    const coordMap = {};
-    cities.forEach((c) => {
-      coordMap[c.city.trim().toLowerCase()] = {
-        lat: parseFloat(c.latitude),
-        lng: parseFloat(c.longitude),
-      };
-    });
+    await autoCloseResolvedTweets();
 
-    // Attach coordinates to each tweet
-    const tweetsWithCoords = tweets.map((tweet) => {
-      const locKey = tweet.location.trim().toLowerCase();
-      const coords = coordMap[locKey] || null;
-      return {
-        ...tweet,
-        coordinates: coords,
-      };
-    });
+    const tweets = await fetchTweets({ since });
+
+    const tweetsWithCoords = tweets.map((tweet) => ({
+      ...tweet,
+      coordinates:
+        Number.isFinite(tweet.latitude) && Number.isFinite(tweet.longitude)
+          ? { lat: tweet.latitude, lng: tweet.longitude }
+          : null,
+    }));
 
     return NextResponse.json({
       tweets: tweetsWithCoords,
-      cityCoordinates: cities,
       total: tweetsWithCoords.length,
     });
   } catch (error) {
     console.error("Error fetching tweets:", error);
     return NextResponse.json(
       { error: "Failed to fetch tweets data" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(request) {
+  try {
+    const body = await request.json();
+    const id = Number(body?.id);
+    const action = body?.action;
+
+    if (!id || !["resolve", "close", "acknowledge"].includes(action)) {
+      return NextResponse.json(
+        { error: "Invalid payload. Required: id and action(resolve|close|acknowledge)" },
+        { status: 400 }
+      );
+    }
+
+    const result = await updateTweetStatus(id, action);
+    if (!result.success) {
+      return NextResponse.json(
+        { error: result.message || "Failed to update tweet status" },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Error updating tweet status:", error);
+    return NextResponse.json(
+      { error: "Failed to update tweet status" },
       { status: 500 }
     );
   }

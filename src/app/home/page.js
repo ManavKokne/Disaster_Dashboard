@@ -3,7 +3,6 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import useSWR from "swr";
 import Navbar from "@/components/dashboard/Navbar";
 import MapContainer from "@/components/dashboard/MapContainer";
 import AnalyticsChart from "@/components/dashboard/AnalyticsChart";
@@ -12,36 +11,47 @@ import FilterDrawer from "@/components/dashboard/FilterDrawer";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
-
-const fetcher = (url) => fetch(url).then((res) => res.json());
+import useDashboardAlerts from "@/hooks/useDashboardAlerts";
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
-  // Tweet state - local copy for mutations (resolve/close)
-  const [tweets, setTweets] = useState([]);
-  const [closedIds, setClosedIds] = useState(new Set());
+  const [toasts, setToasts] = useState([]);
 
-  // Map filter state
   const [filterLocation, setFilterLocation] = useState("");
   const [filterMarker, setFilterMarker] = useState("all");
 
   // Drawer state
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  // Fetch data with SWR for fast, cached loading
-  const { data, error, isLoading } = useSWR("/api/tweets", fetcher, {
-    revalidateOnFocus: false,
-    dedupingInterval: 60000,
-  });
+  const pushToast = useCallback((message, tone = "info") => {
+    const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    setToasts((prev) => [...prev, { id, message, tone }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((item) => item.id !== id));
+    }, 3500);
+  }, []);
 
-  // Redirect if not authenticated
   useEffect(() => {
     if (!authLoading && !user) {
       router.replace("/login");
     }
   }, [user, authLoading, router]);
+  const {
+    loadingData,
+    loadError,
+    showSoundPrompt,
+    setShowSoundPrompt,
+    enableSoundNotifications,
+    handleResolve,
+    handleClose,
+    handleAcknowledge,
+    activeTweets,
+    locations,
+    requestTypes,
+  } = useDashboardAlerts({ user, onToast: pushToast });
+
 
   // Sync SWR data to local state
   useEffect(() => {
@@ -113,25 +123,21 @@ export default function DashboardPage() {
     return activeTweets.filter((t) => {
       if (!t.coordinates) return false;
       if (filterLocation && t.location.toLowerCase() !== filterLocation.toLowerCase()) return false;
-      if (filterMarker !== "all" && t.urgency.toLowerCase() !== filterMarker.toLowerCase()) return false;
+      if (filterMarker !== "all" && ((t.urgency || "").toLowerCase() !== filterMarker.toLowerCase() || t.is_resolved)) return false;
       return true;
     });
   }, [activeTweets, filterLocation, filterMarker]);
 
   const urgentCount = useMemo(
-    () => mapTweets.filter((t) => t.urgency.toLowerCase() === "urgent").length,
+    () => mapTweets.filter((t) => (t.urgency || "").toLowerCase() === "urgent" && !t.is_resolved).length,
     [mapTweets]
   );
   const nonUrgentCount = useMemo(
-    () => mapTweets.filter((t) => t.urgency.toLowerCase() === "non-urgent").length,
+    () => mapTweets.filter((t) => (t.urgency || "").toLowerCase() === "non-urgent" && !t.is_resolved).length,
     [mapTweets]
   );
-  const resolvedCount = useMemo(
-    () => mapTweets.filter((t) => t.urgency.toLowerCase() === "resolved").length,
-    [mapTweets]
-  );
+  const resolvedCount = useMemo(() => mapTweets.filter((t) => t.is_resolved).length, [mapTweets]);
 
-  // Loading & auth guard
   if (authLoading) {
     return (
       <div className="h-screen flex items-center justify-center bg-[var(--background)]">
@@ -146,6 +152,86 @@ export default function DashboardPage() {
     <div className="h-screen flex flex-col bg-[var(--background)]">
       <Navbar />
 
+      {showSoundPrompt && (
+        <div className="mx-3 mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm flex items-center justify-between gap-3">
+          <p className="text-amber-900">
+            Enable sound notifications to allow looping audio on new urgent alerts.
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowSoundPrompt(false)}
+              className="px-3 py-1.5 rounded-md border border-slate-300 bg-white text-slate-700 text-xs"
+            >
+              Not now
+            </button>
+            <button
+              onClick={enableSoundNotifications}
+              className="px-3 py-1.5 rounded-md bg-amber-600 text-white text-xs hover:bg-amber-700"
+            >
+              Enable Sound
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="fixed right-3 top-14 z-50 space-y-2">
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            className={`rounded-md px-3 py-2 text-xs shadow-lg border ${
+              toast.tone === "error"
+                ? "bg-red-50 border-red-300 text-red-800"
+                : toast.tone === "success"
+                ? "bg-green-50 border-green-300 text-green-800"
+                : "bg-white border-slate-300 text-slate-800"
+            }`}
+          >
+            {toast.message}
+          </div>
+        ))}
+      </div>
+
+      <div className="flex-1 flex flex-col p-3 gap-3 overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-10 gap-3 flex-1 min-h-0">
+          <Card className="lg:col-span-6 overflow-hidden">
+            <CardContent className="p-0 h-full flex">
+              <div className="flex-1 min-w-0">
+                {loadingData ? (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+                  </div>
+                ) : loadError ? (
+                  <div className="w-full h-full flex items-center justify-center text-red-500 text-sm">
+                    {loadError}
+                  </div>
+                ) : (
+                  <MapContainer
+                    tweets={activeTweets}
+                    onResolve={handleResolve}
+                    onClose={handleClose}
+                    onAcknowledge={handleAcknowledge}
+                    filterLocation={filterLocation}
+                    filterUrgentOnly={filterUrgentOnly}
+                  />
+                )}
+              </div>
+              <div className="w-[180px] border-l border-slate-200 bg-slate-50 flex-shrink-0 overflow-y-auto hidden lg:block">
+                <MapFilters
+                  locations={locations}
+                  filterLocation={filterLocation}
+                  setFilterLocation={setFilterLocation}
+                  filterUrgentOnly={filterUrgentOnly}
+                  setFilterUrgentOnly={setFilterUrgentOnly}
+                  onReset={() => {
+                    setFilterLocation("");
+                    setFilterUrgentOnly(false);
+                  }}
+                  urgentCount={urgentCount}
+                  nonUrgentCount={nonUrgentCount}
+                  resolvedCount={resolvedCount}
+                  totalVisible={mapTweets.length}
+                />
+              </div>
       {/* Main Content */}
       <div className="flex-1 flex flex-col p-3 gap-3 overflow-y-auto">
         {/* Top Section: Map + Chart */}
@@ -204,10 +290,9 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          {/* Chart (cols 7-10) */}
           <Card className="lg:col-span-4 overflow-hidden">
             <CardContent className="p-4 h-full min-h-[240px]">
-              {isLoading ? (
+              {loadingData ? (
                 <div className="w-full h-full flex items-center justify-center">
                   <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
                 </div>
@@ -218,19 +303,37 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {/* Bottom Section: Data Table */}
+        {/* Mobile Filters (visible on smaller screens) */}
+        <div className="lg:hidden">
+          <Card>
+            <CardContent className="p-2">
+              <MapFilters
+                locations={locations}
+                filterLocation={filterLocation}
+                setFilterLocation={setFilterLocation}
+                filterUrgentOnly={filterUrgentOnly}
+                setFilterUrgentOnly={setFilterUrgentOnly}
+                onReset={() => {
+                  setFilterLocation("");
+                  setFilterUrgentOnly(false);
+                }}
+                urgentCount={urgentCount}
+                nonUrgentCount={nonUrgentCount}
+                resolvedCount={resolvedCount}
+                totalVisible={mapTweets.length}
+              />
+            </CardContent>
+          </Card>
+        </div>
+
         <Card className="min-h-[240px] overflow-hidden">
           <CardContent className="p-0 h-full">
-            {isLoading ? (
+            {loadingData ? (
               <div className="w-full h-full flex items-center justify-center">
                 <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
               </div>
             ) : (
-              <DataListTable
-                tweets={activeTweets}
-                locations={locations}
-                requestTypes={requestTypes}
-              />
+              <DataListTable tweets={activeTweets} locations={locations} requestTypes={requestTypes} />
             )}
           </CardContent>
         </Card>

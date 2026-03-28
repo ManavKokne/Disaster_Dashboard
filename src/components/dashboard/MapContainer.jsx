@@ -82,6 +82,7 @@ export default function MapContainer({
   tweets,
   onResolve,
   onClose,
+  onAcknowledge,
   filterLocation,
   filterMarker = "all",
 }) {
@@ -103,12 +104,14 @@ export default function MapContainer({
 
   // Filter tweets for map display
   const filteredTweets = useMemo(() => {
-    const filtered = tweets.filter((t) => {
-      if (!t.coordinates) return false;
-      if (filterLocation && t.location.toLowerCase() !== filterLocation.toLowerCase()) return false;
-      if (filterMarker !== "all" && t.urgency.toLowerCase() !== filterMarker.toLowerCase()) return false;
-      return true;
-    });
+    const filtered = useMemo(() => {
+    return tweets.filter((t) => {
+        if (!t.coordinates) return false;
+        if (filterLocation && t.location.toLowerCase() !== filterLocation.toLowerCase()) return false;
+        if (filterMarker !== "all" && ((t.urgency || "").toLowerCase() !== filterMarker.toLowerCase() || t.is_resolved)) return false;
+        return true;
+      });
+  }, [tweets, filterLocation, filterUrgentOnly]);
     return jitterCoordinates(filtered);
   }, [tweets, filterLocation, filterMarker]);
 
@@ -127,6 +130,18 @@ export default function MapContainer({
     onClose(tweet.id);
     setSelectedTweetId(null);
   };
+
+  const hideInfoWindowCloseButton = useCallback(() => {
+    // Google injects the close control dynamically, so hide it after mount.
+    requestAnimationFrame(() => {
+      const closeButtons = document.querySelectorAll(".gm-style-iw button.gm-ui-hover-effect");
+      closeButtons.forEach((button) => {
+        button.style.display = "none";
+        button.setAttribute("aria-hidden", "true");
+        button.setAttribute("tabindex", "-1");
+      });
+    });
+  }, []);
 
   if (!isLoaded) {
     return (
@@ -147,9 +162,9 @@ export default function MapContainer({
       onClick={() => setSelectedTweetId(null)}
     >
       {filteredTweets.map((tweet) => {
-        const urgencyLower = tweet.urgency.toLowerCase();
+        const urgencyLower = (tweet.urgency || "").toLowerCase();
         const isUrgent = urgencyLower === "urgent";
-        const isResolved = urgencyLower === "resolved";
+        const isResolved = Boolean(tweet.is_resolved) || urgencyLower === "resolved";
         return (
           <OverlayViewF
             key={tweet.id}
@@ -171,8 +186,69 @@ export default function MapContainer({
         <InfoWindowF
           position={selectedTweet.coordinates}
           onCloseClick={() => setSelectedTweetId(null)}
+          onDomReady={hideInfoWindowCloseButton}
           options={{ pixelOffset: new window.google.maps.Size(0, -20), maxWidth: 360 }}
         >
+          <div style={{ minWidth: 260, maxWidth: 320, overflow: "visible" }}>
+            <div className="rounded-lg border border-slate-200 bg-white">
+              <div className="px-3 py-2 border-b border-slate-200 bg-slate-50 rounded-t-lg">
+                <h4 className="text-sm font-semibold text-slate-800">Incident Alert</h4>
+                <p className="text-[11px] text-slate-500">Operator Action Panel</p>
+              </div>
+
+              <div className="px-3 py-2.5 space-y-2">
+                <p className="text-sm text-slate-800 font-medium leading-snug">
+                  {selectedTweet.tweet || selectedTweet.content}
+                </p>
+
+                <div className="grid grid-cols-[70px_1fr] gap-y-1 text-xs">
+                  <span className="font-semibold text-slate-600">Location</span>
+                  <span className="text-slate-700">{selectedTweet.location}</span>
+
+                  <span className="font-semibold text-slate-600">Category</span>
+                  <span className="text-slate-700">{selectedTweet.request_type || "N/A"}</span>
+
+                  <span className="font-semibold text-slate-600">Urgency</span>
+                  <span
+                    className={
+                      (selectedTweet.urgency || "").toLowerCase() === "urgent" && !selectedTweet.is_resolved
+                        ? "text-red-600 font-semibold"
+                        : selectedTweet.is_resolved
+                        ? "text-green-600 font-semibold"
+                        : "text-blue-600 font-semibold"
+                    }
+                  >
+                    {selectedTweet.is_resolved ? "resolved" : selectedTweet.urgency}
+                  </span>
+                </div>
+              </div>
+
+              <div className="px-3 py-2.5 border-t border-slate-200 flex flex-wrap gap-2 rounded-b-lg bg-white">
+                {!selectedTweet.is_resolved && (
+                  <button
+                    onClick={() => handleResolve(selectedTweet)}
+                    className="px-3 py-1.5 bg-green-600 text-white text-xs rounded-md hover:bg-green-700 transition-colors cursor-pointer"
+                  >
+                    Resolved
+                  </button>
+                )}
+
+                {(selectedTweet.urgency || "").toLowerCase() === "urgent" && !selectedTweet.is_resolved && !selectedTweet.is_acknowledged && (
+                  <button
+                    onClick={() => onAcknowledge?.(selectedTweet.id)}
+                    className="px-3 py-1.5 bg-amber-600 text-white text-xs rounded-md hover:bg-amber-700 transition-colors cursor-pointer"
+                  >
+                    Acknowledge
+                  </button>
+                )}
+
+                <button
+                  onClick={() => handleClose(selectedTweet)}
+                  className="px-3 py-1.5 bg-slate-600 text-white text-xs rounded-md hover:bg-slate-700 transition-colors cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
           <div style={{ minWidth: 260, maxWidth: 330, overflow: "visible", fontFamily: "system-ui, -apple-system, sans-serif" }}>
             {/* Urgency badge header */}
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>

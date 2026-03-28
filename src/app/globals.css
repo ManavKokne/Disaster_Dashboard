@@ -73,6 +73,12 @@ body {
 }
 .gm-style-iw-c {
   max-height: none !important;
+  padding: 0 !important;
+}
+
+/* Hide default InfoWindow close icon; outside click still closes it */
+.gm-style-iw .gm-ui-hover-effect {
+  display: none !important;
   padding: 14px 16px !important;
   border-radius: 12px !important;
   box-shadow: 0 8px 30px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06) !important;
