@@ -60,6 +60,14 @@ function normalizeTweetRow(row) {
   };
 }
 
+function normalizeMarkerType(markerType) {
+  const value = String(markerType || "all").trim().toLowerCase();
+  if (["urgent", "non-urgent", "resolved", "all"].includes(value)) {
+    return value;
+  }
+  return "all";
+}
+
 async function fetchTweetsFromSql({ since } = {}) {
   const pool = getDbPool();
   if (!pool) return null;
@@ -135,6 +143,104 @@ async function fetchTweetsFromSql({ since } = {}) {
   }
 
   throw lastError || new Error("Unable to fetch tweets");
+}
+
+export async function fetchTweetsForCsvExport(markerType = "all") {
+  const pool = getDbPool();
+  if (!pool) {
+    return { success: false, message: "SQL not configured", rows: [] };
+  }
+
+  const normalizedType = normalizeMarkerType(markerType);
+  const whereClauses = [];
+
+  if (normalizedType === "urgent") {
+    whereClauses.push(
+      "LOWER(COALESCE(urgency, '')) = 'urgent' AND COALESCE(is_resolved, 0) = 0"
+    );
+  }
+
+  if (normalizedType === "non-urgent") {
+    whereClauses.push(
+      "LOWER(COALESCE(urgency, '')) <> 'urgent' AND COALESCE(is_resolved, 0) = 0"
+    );
+  }
+
+  if (normalizedType === "resolved") {
+    whereClauses.push(
+      "COALESCE(is_resolved, 0) = 1 OR LOWER(COALESCE(urgency, '')) = 'resolved'"
+    );
+  }
+
+  const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
+
+  const queries = [
+    `
+      SELECT
+        id,
+        content AS tweet,
+        location,
+        request_type,
+        urgency,
+        is_resolved,
+        is_closed,
+        is_acknowledged,
+        latitude,
+        longitude,
+        geocode_status,
+        created_at,
+        updated_at,
+        resolved_at,
+        closed_at
+      FROM tweets
+      ${whereSql}
+      ORDER BY created_at DESC, id DESC
+    `,
+    `
+      SELECT
+        id,
+        tweet,
+        location,
+        request_type,
+        urgency,
+        is_resolved,
+        is_closed,
+        is_acknowledged,
+        latitude,
+        longitude,
+        geocode_status,
+        created_at,
+        updated_at,
+        resolved_at,
+        closed_at
+      FROM tweets
+      ${whereSql}
+      ORDER BY created_at DESC, id DESC
+    `,
+  ];
+
+  let lastError = null;
+
+  for (const query of queries) {
+    try {
+      const [rows] = await pool.query(query);
+      return {
+        success: true,
+        rows: rows.map(normalizeTweetRow),
+      };
+    } catch (error) {
+      lastError = error;
+      if (error?.code !== "ER_BAD_FIELD_ERROR") {
+        return { success: false, message: error.message || "SQL query failed", rows: [] };
+      }
+    }
+  }
+
+  return {
+    success: false,
+    message: lastError?.message || "Unable to export tweets",
+    rows: [],
+  };
 }
 
 async function fetchTweetsFromCsv({ since } = {}) {

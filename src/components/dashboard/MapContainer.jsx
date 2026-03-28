@@ -47,7 +47,7 @@ function NonUrgentMarker({ onClick }) {
       style={{ transform: "translate(-7px, -7px)", willChange: "auto" }}
       onClick={(e) => { e.stopPropagation(); onClick(); }}
     >
-      <div className="w-[14px] h-[14px] rounded-full border-2 border-white" style={{ background: "#3b82f6", boxShadow: "0 0 3px rgba(0,0,0,0.3)" }} />
+      <div className="w-3.5 h-3.5 rounded-full border-2 border-white" style={{ background: "#3b82f6", boxShadow: "0 0 3px rgba(0,0,0,0.3)" }} />
     </div>
   );
 }
@@ -59,7 +59,7 @@ function ResolvedMarker({ onClick }) {
       style={{ transform: "translate(-7px, -7px)", willChange: "auto" }}
       onClick={(e) => { e.stopPropagation(); onClick(); }}
     >
-      <div className="w-[14px] h-[14px] rounded-full border-2 border-white" style={{ background: "#22c55e", boxShadow: "0 0 3px rgba(0,0,0,0.3)" }} />
+      <div className="w-3.5 h-3.5 rounded-full border-2 border-white" style={{ background: "#22c55e", boxShadow: "0 0 3px rgba(0,0,0,0.3)" }} />
     </div>
   );
 }
@@ -70,7 +70,11 @@ export default function MapContainer({
   onClose,
   onAcknowledge,
   filterLocation,
-  filterUrgentOnly,
+  filterMarkerType,
+  filterRequestType,
+  filterAcknowledgement,
+  filterTimeWindow,
+  nowMs,
 }) {
   const { isLoaded } = useJsApiLoader({
     id: "google-map-script",
@@ -91,12 +95,44 @@ export default function MapContainer({
   // Filter tweets for map display
   const filteredTweets = useMemo(() => {
     return tweets.filter((t) => {
+      const urgencyLower = (t.urgency || "").toLowerCase();
+      const isResolved = Boolean(t.is_resolved) || urgencyLower === "resolved";
       if (!t.coordinates) return false;
       if (filterLocation && t.location.toLowerCase() !== filterLocation.toLowerCase()) return false;
-      if (filterUrgentOnly && ((t.urgency || "").toLowerCase() !== "urgent" || t.is_resolved)) return false;
+      if (filterRequestType && filterRequestType !== "all" && (t.request_type || "") !== filterRequestType) return false;
+      if (filterAcknowledgement === "acknowledged" && !t.is_acknowledged) return false;
+      if (filterAcknowledgement === "unacknowledged" && t.is_acknowledged) return false;
+
+      if (filterTimeWindow && filterTimeWindow !== "all") {
+        const createdAt = t.created_at || t.updated_at;
+        if (!createdAt) return false;
+        const parsed = new Date(createdAt);
+        if (Number.isNaN(parsed.getTime())) return false;
+
+        const diffMs = nowMs - parsed.getTime();
+        const windowsInMs = {
+          "24h": 24 * 60 * 60 * 1000,
+          "72h": 72 * 60 * 60 * 1000,
+          "7d": 7 * 24 * 60 * 60 * 1000,
+        };
+
+        if (diffMs > (windowsInMs[filterTimeWindow] || Number.MAX_SAFE_INTEGER)) return false;
+      }
+
+      if (filterMarkerType === "urgent" && (urgencyLower !== "urgent" || isResolved)) return false;
+      if (filterMarkerType === "non-urgent" && (urgencyLower === "urgent" || isResolved)) return false;
+      if (filterMarkerType === "resolved" && !isResolved) return false;
       return true;
     });
-  }, [tweets, filterLocation, filterUrgentOnly]);
+  }, [
+    tweets,
+    filterLocation,
+    filterMarkerType,
+    filterRequestType,
+    filterAcknowledgement,
+    filterTimeWindow,
+    nowMs,
+  ]);
 
   // Derive selectedTweet from the live tweets array so it stays in sync after resolve
   const selectedTweet = useMemo(
@@ -105,11 +141,15 @@ export default function MapContainer({
   );
 
   const handleResolve = (tweet) => {
+    const confirmed = window.confirm("Are you sure you want to mark this alert as Resolved?");
+    if (!confirmed) return;
     onResolve(tweet.id);
     // Keep info window open so user sees it changed to Resolved
   };
 
   const handleClose = (tweet) => {
+    const confirmed = window.confirm("Are you sure you want to Close this alert?");
+    if (!confirmed) return;
     onClose(tweet.id);
     setSelectedTweetId(null);
   };

@@ -138,15 +138,9 @@ export default function useDashboardAlerts({ user, onToast } = {}) {
           (item) => !seenIdsRef.current.has(item.id)
         );
 
-        if (incoming.length > 0) {
-          setTweets((previous) => {
-            const mergedMap = new Map(previous.map((item) => [item.id, item]));
-            incoming.forEach((item) => mergedMap.set(item.id, item));
-            return Array.from(mergedMap.values());
-          });
-
-          incoming.forEach((item) => seenIdsRef.current.add(item.id));
-        }
+        // Replace local list with server state so tweets auto-closed on backend disappear without reload.
+        setTweets(incoming);
+        incoming.forEach((item) => seenIdsRef.current.add(item.id));
 
         const newUrgent = newRecords.filter(
           (item) =>
@@ -218,14 +212,14 @@ export default function useDashboardAlerts({ user, onToast } = {}) {
         notify("Alert marked as resolved", "success");
 
         const timeoutId = setTimeout(async () => {
+          let closedTweet = null;
+          setTweets((previous) => {
+            closedTweet = previous.find((item) => item.id === tweetId) || tweet;
+            return previous.filter((item) => item.id !== tweetId);
+          });
+
           try {
             await updateTweet(tweetId, "close");
-
-            let closedTweet = null;
-            setTweets((previous) => {
-              closedTweet = previous.find((item) => item.id === tweetId) || tweet;
-              return previous.filter((item) => item.id !== tweetId);
-            });
 
             if (closedTweet) {
               sendAlert("closed", closedTweet);

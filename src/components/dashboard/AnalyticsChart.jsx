@@ -93,11 +93,16 @@ export default function AnalyticsChart({ tweets }) {
         },
       },
       y: {
+        beginAtZero: true,
         grid: { color: "#f1f5f9" },
         ticks: {
           color: "#64748b",
           font: { size: 11 },
-          beginAtZero: true,
+          precision: 0,
+          callback: (value) => {
+            const numeric = Number(value);
+            return Number.isInteger(numeric) ? numeric : "";
+          },
         },
         title: {
           display: true,
