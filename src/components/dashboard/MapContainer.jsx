@@ -13,7 +13,6 @@ import { jitterCoordinates } from "@/lib/coordinate-jitter";
 const MAP_CENTER = { lat: 22.5, lng: 82.0 };
 const MAP_ZOOM = 5;
 
-// India bounds
 const INDIA_BOUNDS = {
   north: 37.6,
   south: 6.7,
@@ -44,7 +43,10 @@ function UrgentMarker({ onClick }) {
     <div
       className="cursor-pointer"
       style={{ transform: "translate(-12px, -12px)" }}
-      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick();
+      }}
     >
       <div className="relative w-6 h-6 flex items-center justify-center">
         <div className="absolute inset-0 rounded-full bg-red-500 opacity-40 urgent-ping" />
@@ -59,9 +61,15 @@ function NonUrgentMarker({ onClick }) {
     <div
       className="cursor-pointer"
       style={{ transform: "translate(-7px, -7px)", willChange: "auto" }}
-      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick();
+      }}
     >
-      <div className="w-[14px] h-[14px] rounded-full border-2 border-white" style={{ background: "#3b82f6", boxShadow: "0 0 3px rgba(0,0,0,0.3)" }} />
+      <div
+        className="w-3.5 h-3.5 rounded-full border-2 border-white"
+        style={{ background: "#3b82f6", boxShadow: "0 0 3px rgba(0,0,0,0.3)" }}
+      />
     </div>
   );
 }
@@ -71,11 +79,22 @@ function ResolvedMarker({ onClick }) {
     <div
       className="cursor-pointer"
       style={{ transform: "translate(-7px, -7px)", willChange: "auto" }}
-      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick();
+      }}
     >
-      <div className="w-[14px] h-[14px] rounded-full border-2 border-white" style={{ background: "#22c55e", boxShadow: "0 0 3px rgba(0,0,0,0.3)" }} />
+      <div
+        className="w-3.5 h-3.5 rounded-full border-2 border-white"
+        style={{ background: "#22c55e", boxShadow: "0 0 3px rgba(0,0,0,0.3)" }}
+      />
     </div>
   );
+}
+
+function getMarkerType(tweet) {
+  if (tweet?.is_resolved) return "resolved";
+  return (tweet?.urgency || "").toLowerCase();
 }
 
 export default function MapContainer({
@@ -102,39 +121,37 @@ export default function MapContainer({
     mapRef.current = null;
   }, []);
 
-  // Filter tweets for map display
   const filteredTweets = useMemo(() => {
-    const filtered = useMemo(() => {
-    return tweets.filter((t) => {
-        if (!t.coordinates) return false;
-        if (filterLocation && t.location.toLowerCase() !== filterLocation.toLowerCase()) return false;
-        if (filterMarker !== "all" && ((t.urgency || "").toLowerCase() !== filterMarker.toLowerCase() || t.is_resolved)) return false;
-        return true;
-      });
-  }, [tweets, filterLocation, filterUrgentOnly]);
+    const filtered = tweets.filter((tweet) => {
+      if (!tweet.coordinates) return false;
+      if (
+        filterLocation &&
+        (tweet.location || "").toLowerCase() !== filterLocation.toLowerCase()
+      ) {
+        return false;
+      }
+      if (filterMarker !== "all" && getMarkerType(tweet) !== filterMarker) {
+        return false;
+      }
+      return true;
+    });
+
     return jitterCoordinates(filtered);
   }, [tweets, filterLocation, filterMarker]);
 
-  // Derive selectedTweet from the live tweets array so it stays in sync after resolve
   const selectedTweet = useMemo(
-    () => (selectedTweetId ? filteredTweets.find((t) => t.id === selectedTweetId) : null),
-    [selectedTweetId, filteredTweets]
+    () =>
+      selectedTweetId
+        ? filteredTweets.find((tweet) => tweet.id === selectedTweetId)
+        : null,
+    [filteredTweets, selectedTweetId]
   );
 
-  const handleResolve = (tweet) => {
-    onResolve(tweet.id);
-    // Keep info window open so user sees it changed to Resolved
-  };
-
-  const handleClose = (tweet) => {
-    onClose(tweet.id);
-    setSelectedTweetId(null);
-  };
-
   const hideInfoWindowCloseButton = useCallback(() => {
-    // Google injects the close control dynamically, so hide it after mount.
     requestAnimationFrame(() => {
-      const closeButtons = document.querySelectorAll(".gm-style-iw button.gm-ui-hover-effect");
+      const closeButtons = document.querySelectorAll(
+        ".gm-style-iw button.gm-ui-hover-effect"
+      );
       closeButtons.forEach((button) => {
         button.style.display = "none";
         button.setAttribute("aria-hidden", "true");
@@ -162,18 +179,16 @@ export default function MapContainer({
       onClick={() => setSelectedTweetId(null)}
     >
       {filteredTweets.map((tweet) => {
-        const urgencyLower = (tweet.urgency || "").toLowerCase();
-        const isUrgent = urgencyLower === "urgent";
-        const isResolved = Boolean(tweet.is_resolved) || urgencyLower === "resolved";
+        const markerType = getMarkerType(tweet);
         return (
           <OverlayViewF
             key={tweet.id}
             position={tweet.coordinates}
             mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
           >
-            {isResolved ? (
+            {markerType === "resolved" ? (
               <ResolvedMarker onClick={() => setSelectedTweetId(tweet.id)} />
-            ) : isUrgent ? (
+            ) : markerType === "urgent" ? (
               <UrgentMarker onClick={() => setSelectedTweetId(tweet.id)} />
             ) : (
               <NonUrgentMarker onClick={() => setSelectedTweetId(tweet.id)} />
@@ -187,7 +202,10 @@ export default function MapContainer({
           position={selectedTweet.coordinates}
           onCloseClick={() => setSelectedTweetId(null)}
           onDomReady={hideInfoWindowCloseButton}
-          options={{ pixelOffset: new window.google.maps.Size(0, -20), maxWidth: 360 }}
+          options={{
+            pixelOffset: new window.google.maps.Size(0, -20),
+            maxWidth: 360,
+          }}
         >
           <div style={{ minWidth: 260, maxWidth: 320, overflow: "visible" }}>
             <div className="rounded-lg border border-slate-200 bg-white">
@@ -206,144 +224,57 @@ export default function MapContainer({
                   <span className="text-slate-700">{selectedTweet.location}</span>
 
                   <span className="font-semibold text-slate-600">Category</span>
-                  <span className="text-slate-700">{selectedTweet.request_type || "N/A"}</span>
+                  <span className="text-slate-700">
+                    {selectedTweet.request_type || "N/A"}
+                  </span>
 
                   <span className="font-semibold text-slate-600">Urgency</span>
                   <span
                     className={
-                      (selectedTweet.urgency || "").toLowerCase() === "urgent" && !selectedTweet.is_resolved
+                      getMarkerType(selectedTweet) === "urgent"
                         ? "text-red-600 font-semibold"
-                        : selectedTweet.is_resolved
+                        : getMarkerType(selectedTweet) === "resolved"
                         ? "text-green-600 font-semibold"
                         : "text-blue-600 font-semibold"
                     }
                   >
-                    {selectedTweet.is_resolved ? "resolved" : selectedTweet.urgency}
+                    {getMarkerType(selectedTweet) === "resolved"
+                      ? "resolved"
+                      : selectedTweet.urgency}
                   </span>
                 </div>
               </div>
 
               <div className="px-3 py-2.5 border-t border-slate-200 flex flex-wrap gap-2 rounded-b-lg bg-white">
-                {!selectedTweet.is_resolved && (
+                {getMarkerType(selectedTweet) !== "resolved" && (
                   <button
-                    onClick={() => handleResolve(selectedTweet)}
+                    onClick={() => onResolve?.(selectedTweet.id)}
                     className="px-3 py-1.5 bg-green-600 text-white text-xs rounded-md hover:bg-green-700 transition-colors cursor-pointer"
                   >
                     Resolved
                   </button>
                 )}
 
-                {(selectedTweet.urgency || "").toLowerCase() === "urgent" && !selectedTweet.is_resolved && !selectedTweet.is_acknowledged && (
-                  <button
-                    onClick={() => onAcknowledge?.(selectedTweet.id)}
-                    className="px-3 py-1.5 bg-amber-600 text-white text-xs rounded-md hover:bg-amber-700 transition-colors cursor-pointer"
-                  >
-                    Acknowledge
-                  </button>
-                )}
+                {getMarkerType(selectedTweet) === "urgent" &&
+                  !selectedTweet.is_acknowledged && (
+                    <button
+                      onClick={() => onAcknowledge?.(selectedTweet.id)}
+                      className="px-3 py-1.5 bg-amber-600 text-white text-xs rounded-md hover:bg-amber-700 transition-colors cursor-pointer"
+                    >
+                      Acknowledge
+                    </button>
+                  )}
 
                 <button
-                  onClick={() => handleClose(selectedTweet)}
+                  onClick={() => {
+                    onClose?.(selectedTweet.id);
+                    setSelectedTweetId(null);
+                  }}
                   className="px-3 py-1.5 bg-slate-600 text-white text-xs rounded-md hover:bg-slate-700 transition-colors cursor-pointer"
                 >
                   Close
                 </button>
               </div>
-          <div style={{ minWidth: 260, maxWidth: 330, overflow: "visible", fontFamily: "system-ui, -apple-system, sans-serif" }}>
-            {/* Urgency badge header */}
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 4,
-                  padding: "3px 10px",
-                  borderRadius: 999,
-                  fontSize: 11,
-                  fontWeight: 600,
-                  letterSpacing: 0.3,
-                  color: "#fff",
-                  background:
-                    selectedTweet.urgency.toLowerCase() === "urgent"
-                      ? "#dc2626"
-                      : selectedTweet.urgency.toLowerCase() === "resolved"
-                      ? "#16a34a"
-                      : "#2563eb",
-                }}
-              >
-                <span style={{ fontSize: 10 }}>
-                  {selectedTweet.urgency.toLowerCase() === "urgent"
-                    ? "\u26A0"
-                    : selectedTweet.urgency.toLowerCase() === "resolved"
-                    ? "\u2714"
-                    : "\u25CF"}
-                </span>
-                {selectedTweet.urgency}
-              </span>
-            </div>
-
-            {/* Tweet text */}
-            <p style={{ fontSize: 13, fontWeight: 500, color: "#1e293b", lineHeight: 1.5, margin: "0 0 12px 0" }}>
-              {selectedTweet.tweet}
-            </p>
-
-            {/* Meta grid */}
-            <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "6px 12px", fontSize: 12, color: "#475569", marginBottom: 14 }}>
-              <span style={{ fontWeight: 600, color: "#64748b" }}>Location</span>
-              <span>{selectedTweet.location}</span>
-              <span style={{ fontWeight: 600, color: "#64748b" }}>Category</span>
-              <span>{selectedTweet.request_type}</span>
-            </div>
-
-            {/* Divider */}
-            <div style={{ height: 1, background: "#e2e8f0", margin: "0 0 12px 0" }} />
-
-            {/* Action buttons */}
-            <div style={{ display: "flex", gap: 8 }}>
-              {selectedTweet.urgency.toLowerCase() === "urgent" && (
-                <button
-                  onClick={() => handleResolve(selectedTweet)}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 5,
-                    padding: "6px 14px",
-                    background: "#16a34a",
-                    color: "#fff",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    borderRadius: 6,
-                    border: "none",
-                    cursor: "pointer",
-                    transition: "background 0.15s",
-                  }}
-                  onMouseOver={(e) => (e.currentTarget.style.background = "#15803d")}
-                  onMouseOut={(e) => (e.currentTarget.style.background = "#16a34a")}
-                >
-                  Mark Resolved
-                </button>
-              )}
-              <button
-                onClick={() => handleClose(selectedTweet)}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 5,
-                  padding: "6px 14px",
-                  background: "#f1f5f9",
-                  color: "#475569",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  borderRadius: 6,
-                  border: "1px solid #e2e8f0",
-                  cursor: "pointer",
-                  transition: "background 0.15s",
-                }}
-                onMouseOver={(e) => (e.currentTarget.style.background = "#e2e8f0")}
-                onMouseOut={(e) => (e.currentTarget.style.background = "#f1f5f9")}
-              >
-                Close
-              </button>
             </div>
           </div>
         </InfoWindowF>

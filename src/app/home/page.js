@@ -8,21 +8,24 @@ import MapContainer from "@/components/dashboard/MapContainer";
 import AnalyticsChart from "@/components/dashboard/AnalyticsChart";
 import DataListTable from "@/components/dashboard/DataListTable";
 import FilterDrawer from "@/components/dashboard/FilterDrawer";
+import MapFilters from "@/components/dashboard/MapFilters";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import useDashboardAlerts from "@/hooks/useDashboardAlerts";
+
+function getMarkerType(tweet) {
+  if (tweet?.is_resolved) return "resolved";
+  return (tweet?.urgency || "").toLowerCase();
+}
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
   const [toasts, setToasts] = useState([]);
-
   const [filterLocation, setFilterLocation] = useState("");
   const [filterMarker, setFilterMarker] = useState("all");
-
-  // Drawer state
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const pushToast = useCallback((message, tone = "info") => {
@@ -38,6 +41,7 @@ export default function DashboardPage() {
       router.replace("/login");
     }
   }, [user, authLoading, router]);
+
   const {
     loadingData,
     loadError,
@@ -52,91 +56,36 @@ export default function DashboardPage() {
     requestTypes,
   } = useDashboardAlerts({ user, onToast: pushToast });
 
-
-  // Sync SWR data to local state
-  useEffect(() => {
-    if (data?.tweets) {
-      setTweets(data.tweets);
-    }
-  }, [data]);
-
-  // Send email alert
-  const sendAlert = useCallback(async (type, tweetData) => {
-    try {
-      await fetch("/api/send-alert", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type, tweetData }),
-      });
-    } catch (err) {
-      console.error("Failed to send alert:", err);
-    }
-  }, []);
-
-  // Handle resolve: change urgency to "Resolved"
-  const handleResolve = useCallback(
-    (tweetId) => {
-      setTweets((prev) =>
-        prev.map((t) =>
-          t.id === tweetId ? { ...t, urgency: "Resolved" } : t
-        )
-      );
-      const tweet = tweets.find((t) => t.id === tweetId);
-      if (tweet) {
-        sendAlert("resolved", tweet);
-      }
-    },
-    [tweets, sendAlert]
-  );
-
-  // Handle close: remove marker from map
-  const handleClose = useCallback(
-    (tweetId) => {
-      setClosedIds((prev) => new Set([...prev, tweetId]));
-      const tweet = tweets.find((t) => t.id === tweetId);
-      if (tweet) {
-        sendAlert("closed", tweet);
-      }
-    },
-    [tweets, sendAlert]
-  );
-
-  // Active tweets (excluding closed ones)
-  const activeTweets = useMemo(
-    () => tweets.filter((t) => !closedIds.has(t.id)),
-    [tweets, closedIds]
-  );
-
-  // Extract unique locations and request types for filters
-  const locations = useMemo(() => {
-    const set = new Set(activeTweets.map((t) => t.location).filter(Boolean));
-    return [...set].sort();
-  }, [activeTweets]);
-
-  const requestTypes = useMemo(() => {
-    const set = new Set(activeTweets.map((t) => t.request_type).filter(Boolean));
-    return [...set].sort();
-  }, [activeTweets]);
-
-  // Map tweets filtered for MapContainer
   const mapTweets = useMemo(() => {
-    return activeTweets.filter((t) => {
-      if (!t.coordinates) return false;
-      if (filterLocation && t.location.toLowerCase() !== filterLocation.toLowerCase()) return false;
-      if (filterMarker !== "all" && ((t.urgency || "").toLowerCase() !== filterMarker.toLowerCase() || t.is_resolved)) return false;
+    return activeTweets.filter((tweet) => {
+      if (!tweet.coordinates) return false;
+      if (
+        filterLocation &&
+        (tweet.location || "").toLowerCase() !== filterLocation.toLowerCase()
+      ) {
+        return false;
+      }
+      if (filterMarker !== "all" && getMarkerType(tweet) !== filterMarker) {
+        return false;
+      }
       return true;
     });
   }, [activeTweets, filterLocation, filterMarker]);
 
   const urgentCount = useMemo(
-    () => mapTweets.filter((t) => (t.urgency || "").toLowerCase() === "urgent" && !t.is_resolved).length,
+    () => mapTweets.filter((tweet) => getMarkerType(tweet) === "urgent").length,
     [mapTweets]
   );
+
   const nonUrgentCount = useMemo(
-    () => mapTweets.filter((t) => (t.urgency || "").toLowerCase() === "non-urgent" && !t.is_resolved).length,
+    () => mapTweets.filter((tweet) => getMarkerType(tweet) === "non-urgent").length,
     [mapTweets]
   );
-  const resolvedCount = useMemo(() => mapTweets.filter((t) => t.is_resolved).length, [mapTweets]);
+
+  const resolvedCount = useMemo(
+    () => mapTweets.filter((tweet) => getMarkerType(tweet) === "resolved").length,
+    [mapTweets]
+  );
 
   if (authLoading) {
     return (
@@ -193,52 +142,7 @@ export default function DashboardPage() {
 
       <div className="flex-1 flex flex-col p-3 gap-3 overflow-hidden">
         <div className="grid grid-cols-1 lg:grid-cols-10 gap-3 flex-1 min-h-0">
-          <Card className="lg:col-span-6 overflow-hidden">
-            <CardContent className="p-0 h-full flex">
-              <div className="flex-1 min-w-0">
-                {loadingData ? (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
-                  </div>
-                ) : loadError ? (
-                  <div className="w-full h-full flex items-center justify-center text-red-500 text-sm">
-                    {loadError}
-                  </div>
-                ) : (
-                  <MapContainer
-                    tweets={activeTweets}
-                    onResolve={handleResolve}
-                    onClose={handleClose}
-                    onAcknowledge={handleAcknowledge}
-                    filterLocation={filterLocation}
-                    filterUrgentOnly={filterUrgentOnly}
-                  />
-                )}
-              </div>
-              <div className="w-[180px] border-l border-slate-200 bg-slate-50 flex-shrink-0 overflow-y-auto hidden lg:block">
-                <MapFilters
-                  locations={locations}
-                  filterLocation={filterLocation}
-                  setFilterLocation={setFilterLocation}
-                  filterUrgentOnly={filterUrgentOnly}
-                  setFilterUrgentOnly={setFilterUrgentOnly}
-                  onReset={() => {
-                    setFilterLocation("");
-                    setFilterUrgentOnly(false);
-                  }}
-                  urgentCount={urgentCount}
-                  nonUrgentCount={nonUrgentCount}
-                  resolvedCount={resolvedCount}
-                  totalVisible={mapTweets.length}
-                />
-              </div>
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col p-3 gap-3 overflow-y-auto">
-        {/* Top Section: Map + Chart */}
-        <div className="grid grid-cols-1 lg:grid-cols-10 gap-3 min-h-[320px] lg:min-h-[360px]">
-          {/* Map (cols 1-6) */}
           <Card className="lg:col-span-6 overflow-hidden relative">
-            {/* Filter Button - overlays map top-left */}
             <Button
               variant="outline"
               size="sm"
@@ -249,40 +153,21 @@ export default function DashboardPage() {
               Filters
             </Button>
 
-            {/* Legend overlay - top right */}
-            <div className="absolute top-2 right-2 z-10 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg border border-slate-200 px-3 py-2.5">
-              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Legend</p>
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-2">
-                  <span className="relative flex h-3 w-3"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-red-500 border border-white"></span></span>
-                  <span className="text-xs text-slate-600">Urgent ({urgentCount})</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex rounded-full h-3 w-3 bg-blue-500 border border-white"></span>
-                  <span className="text-xs text-slate-600">Non-Urgent ({nonUrgentCount})</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex rounded-full h-3 w-3 bg-green-500 border border-white"></span>
-                  <span className="text-xs text-slate-600">Resolved ({resolvedCount})</span>
-                </div>
-              </div>
-              <p className="text-[9px] text-slate-400 mt-1.5">Showing {mapTweets.length} markers</p>
-            </div>
-
             <CardContent className="p-0 h-full min-h-[280px]">
-              {isLoading ? (
+              {loadingData ? (
                 <div className="w-full h-full flex items-center justify-center">
                   <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
                 </div>
-              ) : error ? (
+              ) : loadError ? (
                 <div className="w-full h-full flex items-center justify-center text-red-500 text-sm">
-                  Failed to load data
+                  {loadError}
                 </div>
               ) : (
                 <MapContainer
                   tweets={activeTweets}
                   onResolve={handleResolve}
                   onClose={handleClose}
+                  onAcknowledge={handleAcknowledge}
                   filterLocation={filterLocation}
                   filterMarker={filterMarker}
                 />
@@ -303,7 +188,6 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {/* Mobile Filters (visible on smaller screens) */}
         <div className="lg:hidden">
           <Card>
             <CardContent className="p-2">
@@ -311,11 +195,11 @@ export default function DashboardPage() {
                 locations={locations}
                 filterLocation={filterLocation}
                 setFilterLocation={setFilterLocation}
-                filterUrgentOnly={filterUrgentOnly}
-                setFilterUrgentOnly={setFilterUrgentOnly}
+                filterMarker={filterMarker}
+                setFilterMarker={setFilterMarker}
                 onReset={() => {
                   setFilterLocation("");
-                  setFilterUrgentOnly(false);
+                  setFilterMarker("all");
                 }}
                 urgentCount={urgentCount}
                 nonUrgentCount={nonUrgentCount}
@@ -333,13 +217,16 @@ export default function DashboardPage() {
                 <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
               </div>
             ) : (
-              <DataListTable tweets={activeTweets} locations={locations} requestTypes={requestTypes} />
+              <DataListTable
+                tweets={activeTweets}
+                locations={locations}
+                requestTypes={requestTypes}
+              />
             )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Filter Drawer */}
       <FilterDrawer
         isOpen={drawerOpen}
         onClose={() => setDrawerOpen(false)}
