@@ -3,134 +3,182 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import useSWR from "swr";
 import Navbar from "@/components/dashboard/Navbar";
 import MapContainer from "@/components/dashboard/MapContainer";
 import AnalyticsChart from "@/components/dashboard/AnalyticsChart";
 import DataListTable from "@/components/dashboard/DataListTable";
 import MapFilters from "@/components/dashboard/MapFilters";
+import MapFilterDrawer from "@/components/dashboard/MapFilterDrawer";
+import MapLegendCard from "@/components/dashboard/MapLegendCard";
 import { Card, CardContent } from "@/components/ui/card";
-import { Loader2 } from "lucide-react";
-
-const fetcher = (url) => fetch(url).then((res) => res.json());
+import { Filter, Loader2 } from "lucide-react";
+import useDashboardAlerts from "@/hooks/useDashboardAlerts";
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
-  // Tweet state - local copy for mutations (resolve/close)
-  const [tweets, setTweets] = useState([]);
-  const [closedIds, setClosedIds] = useState(new Set());
+  const [toasts, setToasts] = useState([]);
+  const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
+  const [downloadingCsvType, setDownloadingCsvType] = useState("");
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
-  // Map filter state
   const [filterLocation, setFilterLocation] = useState("");
-  const [filterUrgentOnly, setFilterUrgentOnly] = useState(false);
+  const [filterMarkerType, setFilterMarkerType] = useState("all");
+  const [filterRequestType, setFilterRequestType] = useState("all");
+  const [filterAcknowledgement, setFilterAcknowledgement] = useState("all");
+  const [filterTimeWindow, setFilterTimeWindow] = useState("all");
 
-  // Fetch data with SWR for fast, cached loading
-  const { data, error, isLoading } = useSWR("/api/tweets", fetcher, {
-    revalidateOnFocus: false,
-    dedupingInterval: 60000,
-  });
+  const isWithinTimeWindow = useCallback((tweet) => {
+    if (filterTimeWindow === "all") return true;
 
-  // Redirect if not authenticated
+    const createdAt = tweet.created_at || tweet.updated_at;
+    if (!createdAt) return false;
+
+    const parsed = new Date(createdAt);
+    if (Number.isNaN(parsed.getTime())) return false;
+
+    const diffMs = nowMs - parsed.getTime();
+    const windowsInMs = {
+      "24h": 24 * 60 * 60 * 1000,
+      "72h": 72 * 60 * 60 * 1000,
+      "7d": 7 * 24 * 60 * 60 * 1000,
+    };
+
+    return diffMs <= (windowsInMs[filterTimeWindow] || Number.MAX_SAFE_INTEGER);
+  }, [filterTimeWindow, nowMs]);
+
+  const matchesAdditionalFilters = useCallback((tweet) => {
+    if (filterLocation && tweet.location.toLowerCase() !== filterLocation.toLowerCase()) return false;
+
+    if (filterRequestType !== "all" && (tweet.request_type || "") !== filterRequestType) return false;
+
+    if (filterAcknowledgement === "acknowledged" && !tweet.is_acknowledged) return false;
+    if (filterAcknowledgement === "unacknowledged" && tweet.is_acknowledged) return false;
+
+    if (!isWithinTimeWindow(tweet)) return false;
+
+    return true;
+  }, [filterLocation, filterRequestType, filterAcknowledgement, isWithinTimeWindow]);
+
+  const isTweetMatchingMarkerType = useCallback((tweet, markerType) => {
+    const urgencyLower = (tweet.urgency || "").toLowerCase();
+    const isResolved = Boolean(tweet.is_resolved) || urgencyLower === "resolved";
+
+    if (markerType === "urgent") return urgencyLower === "urgent" && !isResolved;
+    if (markerType === "non-urgent") return urgencyLower !== "urgent" && !isResolved;
+    if (markerType === "resolved") return isResolved;
+    return true;
+  }, []);
+
+  const pushToast = useCallback((message, tone = "info") => {
+    const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    setToasts((prev) => [...prev, { id, message, tone }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((item) => item.id !== id));
+    }, 3500);
+  }, []);
+
   useEffect(() => {
     if (!authLoading && !user) {
       router.replace("/login");
     }
   }, [user, authLoading, router]);
 
-  // Sync SWR data to local state
   useEffect(() => {
-    if (data?.tweets) {
-      setTweets(data.tweets);
-    }
-  }, [data]);
+    const intervalId = setInterval(() => {
+      setNowMs(Date.now());
+    }, 60 * 1000);
 
-  // Send email alert
-  const sendAlert = useCallback(async (type, tweetData) => {
-    try {
-      await fetch("/api/send-alert", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type, tweetData }),
-      });
-    } catch (err) {
-      console.error("Failed to send alert:", err);
-    }
+    return () => clearInterval(intervalId);
   }, []);
+  const {
+    loadingData,
+    loadError,
+    showSoundPrompt,
+    setShowSoundPrompt,
+    enableSoundNotifications,
+    handleResolve,
+    handleClose,
+    handleAcknowledge,
+    allTweets,
+    activeTweets,
+    locations,
+    requestTypes,
+    allLocations,
+    allRequestTypes,
+  } = useDashboardAlerts({ user, onToast: pushToast });
 
-  // Handle resolve: change urgency to "Resolved"
-  const handleResolve = useCallback(
-    (tweetId) => {
-      setTweets((prev) =>
-        prev.map((t) =>
-          t.id === tweetId ? { ...t, urgency: "Resolved" } : t
-        )
-      );
-      const tweet = tweets.find((t) => t.id === tweetId);
-      if (tweet) {
-        sendAlert("resolved", tweet);
-      }
-    },
-    [tweets, sendAlert]
-  );
-
-  // Handle close: remove marker from map
-  const handleClose = useCallback(
-    (tweetId) => {
-      setClosedIds((prev) => new Set([...prev, tweetId]));
-      const tweet = tweets.find((t) => t.id === tweetId);
-      if (tweet) {
-        sendAlert("closed", tweet);
-      }
-    },
-    [tweets, sendAlert]
-  );
-
-  // Active tweets (excluding closed ones)
-  const activeTweets = useMemo(
-    () => tweets.filter((t) => !closedIds.has(t.id)),
-    [tweets, closedIds]
-  );
-
-  // Extract unique locations and request types for filters
-  const locations = useMemo(() => {
-    const set = new Set(activeTweets.map((t) => t.location).filter(Boolean));
-    return [...set].sort();
-  }, [activeTweets]);
-
-  const requestTypes = useMemo(() => {
-    const set = new Set(activeTweets.map((t) => t.request_type).filter(Boolean));
-    return [...set].sort();
-  }, [activeTweets]);
-
-  // Map marker counts
   const mapTweets = useMemo(() => {
     return activeTweets.filter((t) => {
       if (!t.coordinates) return false;
-      if (filterLocation && t.location.toLowerCase() !== filterLocation.toLowerCase()) return false;
-      if (filterUrgentOnly && t.urgency.toLowerCase() !== "urgent") return false;
+      if (!matchesAdditionalFilters(t)) return false;
+      if (!isTweetMatchingMarkerType(t, filterMarkerType)) return false;
       return true;
     });
-  }, [activeTweets, filterLocation, filterUrgentOnly]);
+  }, [activeTweets, matchesAdditionalFilters, filterMarkerType, isTweetMatchingMarkerType]);
+
+  const locationScopedTweets = useMemo(() => {
+    return activeTweets.filter((t) => {
+      if (!t.coordinates) return false;
+      if (!matchesAdditionalFilters(t)) return false;
+      return true;
+    });
+  }, [activeTweets, matchesAdditionalFilters]);
 
   const urgentCount = useMemo(
-    () => mapTweets.filter((t) => t.urgency.toLowerCase() === "urgent").length,
-    [mapTweets]
+    () => locationScopedTweets.filter((t) => isTweetMatchingMarkerType(t, "urgent")).length,
+    [locationScopedTweets, isTweetMatchingMarkerType]
   );
   const nonUrgentCount = useMemo(
-    () => mapTweets.filter((t) => t.urgency.toLowerCase() === "non-urgent").length,
-    [mapTweets]
+    () => locationScopedTweets.filter((t) => isTweetMatchingMarkerType(t, "non-urgent")).length,
+    [locationScopedTweets, isTweetMatchingMarkerType]
   );
   const resolvedCount = useMemo(
-    () => mapTweets.filter((t) => t.urgency.toLowerCase() === "resolved").length,
-    [mapTweets]
+    () => locationScopedTweets.filter((t) => isTweetMatchingMarkerType(t, "resolved")).length,
+    [locationScopedTweets, isTweetMatchingMarkerType]
   );
 
-  // Loading & auth guard
+  const downloadCsv = useCallback(
+    async (markerType) => {
+      try {
+        setDownloadingCsvType(markerType);
+
+        const response = await fetch(
+          `/api/tweets/export?markerType=${encodeURIComponent(markerType)}`
+        );
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          throw new Error(payload.error || "Failed to download CSV");
+        }
+
+        const blob = await response.blob();
+        const disposition = response.headers.get("Content-Disposition") || "";
+        const fileNameMatch = disposition.match(/filename=\"?([^\"]+)\"?/i);
+        const fileName = fileNameMatch?.[1] || `alerts-${markerType}.csv`;
+
+        const objectUrl = window.URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = objectUrl;
+        anchor.download = fileName;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        window.URL.revokeObjectURL(objectUrl);
+
+        pushToast(`CSV downloaded for ${markerType}`, "success");
+      } catch (error) {
+        pushToast(error.message || "CSV download failed", "error");
+      } finally {
+        setDownloadingCsvType("");
+      }
+    },
+    [pushToast]
+  );
+
   if (authLoading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-[var(--background)]">
+      <div className="h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
       </div>
     );
@@ -139,61 +187,99 @@ export default function DashboardPage() {
   if (!user) return null;
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-[var(--background)]">
+    <div className="h-screen flex flex-col overflow-hidden bg-background">
       <Navbar />
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col p-3 gap-3 overflow-hidden">
-        {/* Top Section: Map + Filters/Legend + Chart */}
-        <div className="grid grid-cols-1 lg:grid-cols-10 gap-3 flex-1 min-h-0">
-          {/* Map (cols 1-6) */}
+      {showSoundPrompt && (
+        <div className="mx-3 mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm flex items-center justify-between gap-3">
+          <p className="text-amber-900">
+            Enable sound notifications to allow looping audio on new urgent alerts.
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowSoundPrompt(false)}
+              className="px-3 py-1.5 rounded-md border border-slate-300 bg-white text-slate-700 text-xs"
+            >
+              Not now
+            </button>
+            <button
+              onClick={enableSoundNotifications}
+              className="px-3 py-1.5 rounded-md bg-amber-600 text-white text-xs hover:bg-amber-700"
+            >
+              Enable Sound
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="fixed right-3 top-14 z-50 space-y-2">
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            className={`rounded-md px-3 py-2 text-xs shadow-lg border ${
+              toast.tone === "error"
+                ? "bg-red-50 border-red-300 text-red-800"
+                : toast.tone === "success"
+                ? "bg-green-50 border-green-300 text-green-800"
+                : "bg-white border-slate-300 text-slate-800"
+            }`}
+          >
+            {toast.message}
+          </div>
+        ))}
+      </div>
+
+      <div className="flex-1 flex flex-col p-3 gap-3 overflow-y-auto lg:overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-10 gap-3 lg:flex-1 lg:min-h-0">
           <Card className="lg:col-span-6 overflow-hidden">
-            <CardContent className="p-0 h-full flex">
-              {/* Map */}
-              <div className="flex-1 min-w-0">
-                {isLoading ? (
+            <CardContent className="p-0 h-full">
+              <div className="relative h-full w-full min-h-80 sm:min-h-115 md:min-h-140 lg:min-h-95">
+                {loadingData ? (
                   <div className="w-full h-full flex items-center justify-center">
                     <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
                   </div>
-                ) : error ? (
+                ) : loadError ? (
                   <div className="w-full h-full flex items-center justify-center text-red-500 text-sm">
-                    Failed to load data
+                    {loadError}
                   </div>
                 ) : (
                   <MapContainer
                     tweets={activeTweets}
                     onResolve={handleResolve}
                     onClose={handleClose}
+                    onAcknowledge={handleAcknowledge}
                     filterLocation={filterLocation}
-                    filterUrgentOnly={filterUrgentOnly}
+                    filterMarkerType={filterMarkerType}
+                    filterRequestType={filterRequestType}
+                    filterAcknowledgement={filterAcknowledgement}
+                    filterTimeWindow={filterTimeWindow}
+                    nowMs={nowMs}
                   />
                 )}
-              </div>
-              {/* Filters & Legend sidebar */}
-              <div className="w-[180px] border-l border-slate-200 bg-slate-50 flex-shrink-0 overflow-y-auto hidden lg:block">
-                <MapFilters
-                  locations={locations}
-                  filterLocation={filterLocation}
-                  setFilterLocation={setFilterLocation}
-                  filterUrgentOnly={filterUrgentOnly}
-                  setFilterUrgentOnly={setFilterUrgentOnly}
-                  onReset={() => {
-                    setFilterLocation("");
-                    setFilterUrgentOnly(false);
-                  }}
+
+                <button
+                  type="button"
+                  onClick={() => setIsFilterDrawerOpen(true)}
+                  className="absolute top-3 left-3 z-30 inline-flex items-center gap-2 rounded-md border border-sky-900 bg-sky-800 px-3 py-1.5 text-xs font-semibold text-white shadow-md hover:bg-sky-900 transition-colors"
+                >
+                  <Filter className="h-3.5 w-3.5" />
+                  Filter
+                </button>
+
+                <MapLegendCard
                   urgentCount={urgentCount}
                   nonUrgentCount={nonUrgentCount}
                   resolvedCount={resolvedCount}
                   totalVisible={mapTweets.length}
+                  className="absolute top-3 right-3 z-30"
                 />
               </div>
             </CardContent>
           </Card>
 
-          {/* Chart (cols 7-10) */}
-          <Card className="lg:col-span-4 overflow-hidden">
+          <Card className="lg:col-span-4 overflow-hidden min-h-70 md:min-h-80 lg:min-h-0">
             <CardContent className="p-4 h-full">
-              {isLoading ? (
+              {loadingData ? (
                 <div className="w-full h-full flex items-center justify-center">
                   <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
                 </div>
@@ -204,46 +290,49 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {/* Mobile Filters (visible on smaller screens) */}
-        <div className="lg:hidden">
-          <Card>
-            <CardContent className="p-2">
-              <MapFilters
-                locations={locations}
-                filterLocation={filterLocation}
-                setFilterLocation={setFilterLocation}
-                filterUrgentOnly={filterUrgentOnly}
-                setFilterUrgentOnly={setFilterUrgentOnly}
-                onReset={() => {
-                  setFilterLocation("");
-                  setFilterUrgentOnly(false);
-                }}
-                urgentCount={urgentCount}
-                nonUrgentCount={nonUrgentCount}
-                resolvedCount={resolvedCount}
-                totalVisible={mapTweets.length}
-              />
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Bottom Section: Data Table */}
-        <Card className="flex-1 min-h-[240px] overflow-hidden">
+        <Card className="min-h-80 lg:flex-1 lg:min-h-60 overflow-hidden">
           <CardContent className="p-0 h-full">
-            {isLoading ? (
+            {loadingData ? (
               <div className="w-full h-full flex items-center justify-center">
                 <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
               </div>
             ) : (
-              <DataListTable
-                tweets={activeTweets}
-                locations={locations}
-                requestTypes={requestTypes}
-              />
+              <DataListTable tweets={allTweets} locations={allLocations} requestTypes={allRequestTypes} />
             )}
           </CardContent>
         </Card>
       </div>
+
+      <MapFilterDrawer
+        isOpen={isFilterDrawerOpen}
+        onClose={() => setIsFilterDrawerOpen(false)}
+      >
+        <MapFilters
+          locations={locations}
+          filterLocation={filterLocation}
+          setFilterLocation={setFilterLocation}
+          filterMarkerType={filterMarkerType}
+          setFilterMarkerType={setFilterMarkerType}
+          filterRequestType={filterRequestType}
+          setFilterRequestType={setFilterRequestType}
+          requestTypes={requestTypes}
+          filterAcknowledgement={filterAcknowledgement}
+          setFilterAcknowledgement={setFilterAcknowledgement}
+          filterTimeWindow={filterTimeWindow}
+          setFilterTimeWindow={setFilterTimeWindow}
+          visibleCount={mapTweets.length}
+          totalWithCoordinates={activeTweets.filter((t) => t.coordinates).length}
+          onReset={() => {
+            setFilterLocation("");
+            setFilterMarkerType("all");
+            setFilterRequestType("all");
+            setFilterAcknowledgement("all");
+            setFilterTimeWindow("all");
+          }}
+          onDownloadCsv={downloadCsv}
+          downloadingType={downloadingCsvType}
+        />
+      </MapFilterDrawer>
     </div>
   );
 }

@@ -105,18 +105,37 @@ export default function DataListTable({ tweets, locations, requestTypes }) {
         ),
         size: 120,
         cell: ({ row }) => {
-          const urgency = row.original.urgency.toLowerCase();
+          const urgency = (row.original.urgency || "").toLowerCase();
+          const isClosed = Boolean(row.original.is_closed);
+          const isResolved = Boolean(row.original.is_resolved);
           return (
             <Badge
               variant={
-                urgency === "urgent"
-                  ? "destructive"
-                  : urgency === "resolved"
+                isClosed
+                  ? "secondary"
+                  : isResolved
                   ? "success"
+                  : urgency === "urgent"
+                  ? "destructive"
                   : "outline"
               }
             >
-              {row.original.urgency}
+              {isClosed ? "closed" : isResolved ? "resolved" : row.original.urgency}
+            </Badge>
+          );
+        },
+      },
+      {
+        accessorKey: "is_acknowledged",
+        header: "Acknowledged",
+        size: 110,
+        cell: ({ row }) => {
+          const isAcknowledged = Boolean(row.original.is_acknowledged);
+          return (
+            <Badge
+              variant={isAcknowledged ? "success" : "outline"}
+            >
+              {isAcknowledged ? "Yes" : "No"}
             </Badge>
           );
         },
@@ -128,9 +147,22 @@ export default function DataListTable({ tweets, locations, requestTypes }) {
   // Apply column filters
   const filteredData = useMemo(() => {
     return tweets.filter((t) => {
-      if (locationFilter && t.location.toLowerCase() !== locationFilter.toLowerCase()) return false;
+      if (
+        locationFilter &&
+        (t.location || "").toLowerCase() !== locationFilter.toLowerCase()
+      ) {
+        return false;
+      }
       if (categoryFilter && t.request_type !== categoryFilter) return false;
-      if (urgencyFilter && t.urgency.toLowerCase() !== urgencyFilter.toLowerCase()) return false;
+      if (urgencyFilter) {
+        if (urgencyFilter.toLowerCase() === "closed") {
+          if (!t.is_closed) return false;
+        } else if (urgencyFilter.toLowerCase() === "resolved") {
+          if (!t.is_resolved || t.is_closed) return false;
+        } else if ((t.urgency || "").toLowerCase() !== urgencyFilter.toLowerCase()) {
+          return false;
+        }
+      }
       return true;
     });
   }, [tweets, locationFilter, categoryFilter, urgencyFilter]);
@@ -152,7 +184,7 @@ export default function DataListTable({ tweets, locations, requestTypes }) {
     <div className="flex flex-col h-full">
       {/* Filters Bar */}
       <div className="flex flex-wrap items-center gap-3 p-3 border-b border-slate-200 bg-white">
-        <div className="relative flex-1 min-w-[200px]">
+        <div className="relative flex-1 min-w-50">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <Input
             placeholder="Search tweets..."
@@ -164,7 +196,7 @@ export default function DataListTable({ tweets, locations, requestTypes }) {
         <Select
           value={locationFilter}
           onChange={(e) => setLocationFilter(e.target.value)}
-          className="w-[160px] h-8 text-sm"
+          className="w-40 h-8 text-sm"
         >
           <option value="">All Locations</option>
           {locations.map((loc) => (
@@ -176,7 +208,7 @@ export default function DataListTable({ tweets, locations, requestTypes }) {
         <Select
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value)}
-          className="w-[160px] h-8 text-sm"
+          className="w-40 h-8 text-sm"
         >
           <option value="">All Categories</option>
           {requestTypes.map((rt) => (
@@ -188,12 +220,13 @@ export default function DataListTable({ tweets, locations, requestTypes }) {
         <Select
           value={urgencyFilter}
           onChange={(e) => setUrgencyFilter(e.target.value)}
-          className="w-[140px] h-8 text-sm"
+          className="w-35 h-8 text-sm"
         >
           <option value="">All Urgency</option>
           <option value="Urgent">Urgent</option>
           <option value="Non-Urgent">Non-Urgent</option>
           <option value="Resolved">Resolved</option>
+          <option value="Closed">Closed</option>
         </Select>
       </div>
 

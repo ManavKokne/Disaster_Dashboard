@@ -1,0 +1,51 @@
+show databases;
+use disaster;
+
+CREATE TABLE IF NOT EXISTS tweets (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    content TEXT NOT NULL,
+    location VARCHAR(255) NOT NULL,
+    request_type VARCHAR(100) DEFAULT NULL,
+    urgency ENUM('urgent', 'non-urgent') NOT NULL,
+    is_resolved BOOLEAN NOT NULL DEFAULT FALSE,
+    resolved_at DATETIME NULL,
+    is_closed BOOLEAN NOT NULL DEFAULT FALSE,
+    closed_at DATETIME NULL,
+    timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    is_acknowledged BOOLEAN NOT NULL DEFAULT FALSE,
+    PRIMARY KEY (id),
+    INDEX idx_active_polling (is_closed, timestamp),
+    INDEX idx_urgency (urgency)
+);
+
+ALTER TABLE tweets ADD COLUMN is_acknowledged BOOLEAN DEFAULT 0;
+
+select * from tweets;
+TRUNCATE TABLE tweets;
+
+INSERT INTO tweets (content, location, request_type, urgency) VALUES 
+('Medical emergency reported in Bhopal. Need Medical.', 'MP Nagar Zone 1, Bhopal, Madhya Pradesh', 'Medical', 'non-urgent'),
+('Looking for volunteers in Bhubaneswar for Food & Supplies help.', 'Patia, Bhubaneswar, Odisha', 'Food & Supplies', 'non-urgent'),
+('Looking for volunteers in Guwahati for Humanitarian help.', 'GS Road, Dispur, Guwahati, Assam', 'Humanitarian', 'non-urgent'),
+('Medical emergency reported in Goa. Need Medical.', 'Calangute Beach Road, North Goa, Goa', 'Medical', 'non-urgent'),
+('Senior citizens need Food & Supplies assistance in Hyderabad.', 'Banjara Hills Road No 12, Hyderabad, Telangana', 'Food & Supplies', 'non-urgent'),
+('Family stranded in Aizawl, require Medical.', 'Chanmari, Aizawl, Mizoram', 'Medical', 'non-urgent'),
+('Supplies running low in Chennai, need Medical.', 'T Nagar, Chennai, Tamil Nadu', 'Medical', 'non-urgent'),
+('Requesting Medical support in Kolkata. Please help.', 'Salt Lake Sector V, Kolkata, West Bengal', 'Medical', 'non-urgent'),
+('Children in Mumbai require urgent Humanitarian support.', 'Andheri West, Mumbai, Maharashtra', 'Humanitarian', 'non-urgent'),
+('Need immediate assistance in Bengaluru. Situation critical.', 'BTM Layout 2nd Stage, Bengaluru, Karnataka', 'Medical', 'non-urgent');
+
+INSERT INTO tweets (content, location, request_type, urgency) VALUES 
+('Supplies running low in Pune, need Humanitarian.', 'FC Road, Shivajinagar, Pune, Maharashtra', 'Humanitarian', 'urgent');
+
+INSERT INTO tweets (content, location, request_type, urgency) VALUES 
+('Supplies running low in Mysuru, need Humanitarian.', 'VV Mohalla, Mysuru, Karnataka', 'Humanitarian', 'urgent');
+
+INSERT INTO tweets (content, location, request_type, urgency) VALUES 
+('Requesting Humanitarian support in Bhubaneswar. Please help.', 'Khandagiri, Bhubaneswar, Odisha', 'Humanitarian', 'urgent'),
+('Children in Noida require urgent Food & Supplies support.', 'Sector 62, Noida, Uttar Pradesh', 'Food & Supplies', 'urgent'),
+('Senior citizens need Humanitarian assistance in Pune.', 'Kothrud, Pune, Maharashtra', 'Humanitarian', 'urgent'),
+('Family stranded in Itanagar, require Humanitarian.', 'Naharlagun, Itanagar, Arunachal Pradesh', 'Humanitarian', 'urgent'),
+('Looking for volunteers in Jammu for Food & Supplies help.', 'Gandhi Nagar, Jammu, Jammu & Kashmir', 'Food & Supplies', 'urgent'),
+('Senior citizens need Medical assistance in Mumbai.', 'Dadar East, Mumbai, Maharashtra', 'Medical', 'urgent'),
+('Looking for volunteers in Srinagar for Food & Supplies help.', 'Lal Chowk, Srinagar, Jammu & Kashmir', 'Food & Supplies', 'urgent');

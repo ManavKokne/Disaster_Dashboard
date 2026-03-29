@@ -15,13 +15,13 @@ import { Bar } from "react-chartjs-2";
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 const COLORS = [
-  "rgba(59, 130, 246, 0.8)",   // blue
-  "rgba(239, 68, 68, 0.8)",    // red
-  "rgba(34, 197, 94, 0.8)",    // green
-  "rgba(234, 179, 8, 0.8)",    // yellow
-  "rgba(168, 85, 247, 0.8)",   // purple
-  "rgba(249, 115, 22, 0.8)",   // orange
-  "rgba(20, 184, 166, 0.8)",   // teal
+  "rgba(59, 130, 246, 0.8)",
+  "rgba(239, 68, 68, 0.8)",
+  "rgba(34, 197, 94, 0.8)",
+  "rgba(234, 179, 8, 0.8)",
+  "rgba(168, 85, 247, 0.8)",
+  "rgba(249, 115, 22, 0.8)",
+  "rgba(20, 184, 166, 0.8)",
 ];
 
 const BORDER_COLORS = [
@@ -34,7 +34,7 @@ const BORDER_COLORS = [
   "rgba(20, 184, 166, 1)",
 ];
 
-export default function AnalyticsChart({ tweets }) {
+export default function ChartRequestType({ tweets }) {
   const chartData = useMemo(() => {
     const countMap = {};
     tweets.forEach((t) => {
@@ -49,7 +49,7 @@ export default function AnalyticsChart({ tweets }) {
       labels,
       datasets: [
         {
-          label: "Tweet Count",
+          label: "Alert Count",
           data,
           backgroundColor: labels.map((_, i) => COLORS[i % COLORS.length]),
           borderColor: labels.map((_, i) => BORDER_COLORS[i % BORDER_COLORS.length]),
@@ -69,7 +69,7 @@ export default function AnalyticsChart({ tweets }) {
       },
       title: {
         display: true,
-        text: "Tweets by Request Type",
+        text: "Alerts by Request Type",
         font: { size: 14, weight: "600" },
         color: "#1e293b",
         padding: { bottom: 12 },
@@ -80,6 +80,9 @@ export default function AnalyticsChart({ tweets }) {
         bodyFont: { size: 11 },
         cornerRadius: 6,
         padding: 10,
+        callbacks: {
+          label: (ctx) => `Count: ${ctx.parsed.y}`,
+        },
       },
     },
     scales: {
@@ -93,20 +96,16 @@ export default function AnalyticsChart({ tweets }) {
         },
       },
       y: {
-        beginAtZero: true,
         grid: { color: "#f1f5f9" },
         ticks: {
           color: "#64748b",
           font: { size: 11 },
-          precision: 0,
-          callback: (value) => {
-            const numeric = Number(value);
-            return Number.isInteger(numeric) ? numeric : "";
-          },
+          beginAtZero: true,
+          stepSize: 1,
         },
         title: {
           display: true,
-          text: "Count",
+          text: "Number of Alerts",
           color: "#64748b",
           font: { size: 12 },
         },

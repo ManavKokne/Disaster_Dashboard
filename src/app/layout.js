@@ -13,14 +13,15 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-  title: "Disaster Dashboard - Cummins Analytics",
+  title: "Disaster Dashboard",
   description: "Disaster Post Classification Dashboard for monitoring and managing classified disaster-related social media posts.",
 };
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body
+        suppressHydrationWarning
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <AuthProvider>{children}</AuthProvider>

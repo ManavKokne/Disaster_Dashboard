@@ -4,9 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:local": "node scripts/dev-with-geocode.mjs",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "worker:geocode": "node scripts/geocode-scheduler.mjs"
   },
   "dependencies": {
     "@react-google-maps/api": "^2.20.8",
@@ -15,7 +17,10 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "firebase": "^12.10.0",
+    "lightningcss": "^1.31.1",
+    "lightningcss-win32-x64-msvc": "^1.31.1",
     "lucide-react": "^0.575.0",
+    "mysql2": "^3.20.0",
     "next": "16.1.6",
     "nodemailer": "^8.0.1",
     "papaparse": "^5.5.3",
@@ -23,10 +28,11 @@
     "react-chartjs-2": "^5.3.1",
     "react-dom": "19.2.3",
     "swr": "^2.4.1",
-    "tailwind-merge": "^3.5.0"
+    "tailwind-merge": "^3.5.0",
+    "twilio": "^5.13.0"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
+    "@tailwindcss/postcss": "^4.2.1",
     "babel-plugin-react-compiler": "1.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
