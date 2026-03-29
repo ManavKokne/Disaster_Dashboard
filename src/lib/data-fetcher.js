@@ -68,20 +68,23 @@ function normalizeMarkerType(markerType) {
   return "all";
 }
 
-async function fetchTweetsFromSql({ since } = {}) {
+async function fetchTweetsFromSql({ since, includeClosed = false } = {}) {
   const pool = getDbPool();
   if (!pool) return null;
 
   await autoCloseResolvedTweets();
 
-  const baseConditions = ["is_closed = 0"];
+  const baseConditions = [];
+  if (!includeClosed) {
+    baseConditions.push("is_closed = 0");
+  }
   const params = [];
   if (since) {
     baseConditions.push("created_at > ?");
     params.push(since);
   }
 
-  const whereSql = `WHERE ${baseConditions.join(" AND ")}`;
+  const whereSql = baseConditions.length > 0 ? `WHERE ${baseConditions.join(" AND ")}` : "";
 
   const queries = [
     `
@@ -323,21 +326,58 @@ async function geocodeLocationWithGoogle(location) {
   };
 }
 
-export async function processPendingGeocodes(limit = 10) {
+export async function processPendingGeocodes(input = 10) {
   const pool = getDbPool();
   if (!pool) {
     return { success: false, message: "SQL not configured", processed: 0 };
   }
 
-  const parsedLimit = Math.max(1, Math.min(Number(limit) || 10, 100));
+  const options =
+    typeof input === "object" && input !== null ? input : { limit: input };
+
+  const retryFailed =
+    typeof options.retryFailed === "boolean"
+      ? options.retryFailed
+      : process.env.GEOCODE_RETRY_FAILED === "1";
+
+  const retryMaxAttempts = Math.max(
+    1,
+    Math.min(Number(options.retryMaxAttempts ?? process.env.GEOCODE_RETRY_MAX_ATTEMPTS) || 3, 10)
+  );
+
+  const parsedLimit = Math.max(1, Math.min(Number(options.limit) || 10, 100));
+
+  const statusCondition = retryFailed
+    ? "AND (geocode_status = 'pending' OR geocode_status LIKE 'failed%')"
+    : "AND geocode_status = 'pending'";
+
+  const parseAttemptCount = (status) => {
+    const normalized = String(status || "").trim().toLowerCase();
+    if (!normalized || normalized === "pending" || normalized === "done") return 0;
+    if (normalized === "failed") return 1;
+
+    const match = normalized.match(/^failed_(\d+)$/);
+    if (match) {
+      const parsed = Number(match[1]);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+    }
+
+    if (normalized.startsWith("failed")) return 1;
+    return 0;
+  };
+
+  const toFailedStatus = (attempt) => {
+    if (attempt <= 1) return "failed";
+    return `failed_${attempt}`;
+  };
 
   const queryWithStatus = `
-    SELECT id, location
+    SELECT id, location, geocode_status
     FROM tweets
     WHERE location IS NOT NULL
       AND location <> ''
       AND latitude IS NULL
-      AND geocode_status = 'pending'
+      ${statusCondition}
     ORDER BY id ASC
     LIMIT ?
   `;
@@ -358,6 +398,12 @@ export async function processPendingGeocodes(limit = 10) {
   try {
     const [resultRows] = await pool.query(queryWithStatus, [parsedLimit]);
     rows = resultRows;
+
+    if (retryFailed) {
+      rows = rows
+        .filter((row) => parseAttemptCount(row.geocode_status) < retryMaxAttempts)
+        .slice(0, parsedLimit);
+    }
   } catch (error) {
     if (error?.code !== "ER_BAD_FIELD_ERROR") throw error;
     hasStatusColumn = false;
@@ -383,6 +429,7 @@ export async function processPendingGeocodes(limit = 10) {
 
   for (const row of rows) {
     processed += 1;
+    const currentAttempt = hasStatusColumn ? parseAttemptCount(row.geocode_status) : 0;
 
     try {
       const coords = await geocodeLocationWithGoogle(row.location);
@@ -410,26 +457,28 @@ export async function processPendingGeocodes(limit = 10) {
         success += 1;
       } else {
         if (hasStatusColumn) {
+          const nextAttempt = currentAttempt + 1;
           await pool.query(
             `
             UPDATE tweets
-            SET geocode_status = 'failed'
+            SET geocode_status = ?
             WHERE id = ?
             `,
-            [row.id]
+            [toFailedStatus(nextAttempt), row.id]
           );
         }
         failed += 1;
       }
     } catch (error) {
       if (hasStatusColumn) {
+        const nextAttempt = currentAttempt + 1;
         await pool.query(
           `
           UPDATE tweets
-          SET geocode_status = 'failed'
+          SET geocode_status = ?
           WHERE id = ?
           `,
-          [row.id]
+          [toFailedStatus(nextAttempt), row.id]
         );
       }
       failed += 1;
@@ -442,6 +491,8 @@ export async function processPendingGeocodes(limit = 10) {
     processed,
     geocoded: success,
     failed,
+    retryFailed,
+    retryMaxAttempts,
     statusColumnEnabled: hasStatusColumn,
   };
 }

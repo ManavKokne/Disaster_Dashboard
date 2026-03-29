@@ -101,9 +101,12 @@ export default function DashboardPage() {
     handleResolve,
     handleClose,
     handleAcknowledge,
+    allTweets,
     activeTweets,
     locations,
     requestTypes,
+    allLocations,
+    allRequestTypes,
   } = useDashboardAlerts({ user, onToast: pushToast });
 
   const mapTweets = useMemo(() => {
@@ -226,11 +229,11 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      <div className="flex-1 flex flex-col p-3 gap-3 overflow-hidden">
-        <div className="grid grid-cols-1 lg:grid-cols-10 gap-3 flex-1 min-h-0">
+      <div className="flex-1 flex flex-col p-3 gap-3 overflow-y-auto lg:overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-10 gap-3 lg:flex-1 lg:min-h-0">
           <Card className="lg:col-span-6 overflow-hidden">
             <CardContent className="p-0 h-full">
-              <div className="relative h-full w-full min-h-95">
+              <div className="relative h-full w-full min-h-80 sm:min-h-115 md:min-h-140 lg:min-h-95">
                 {loadingData ? (
                   <div className="w-full h-full flex items-center justify-center">
                     <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
@@ -274,7 +277,7 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          <Card className="lg:col-span-4 overflow-hidden">
+          <Card className="lg:col-span-4 overflow-hidden min-h-70 md:min-h-80 lg:min-h-0">
             <CardContent className="p-4 h-full">
               {loadingData ? (
                 <div className="w-full h-full flex items-center justify-center">
@@ -287,14 +290,14 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        <Card className="flex-1 min-h-60 overflow-hidden">
+        <Card className="min-h-80 lg:flex-1 lg:min-h-60 overflow-hidden">
           <CardContent className="p-0 h-full">
             {loadingData ? (
               <div className="w-full h-full flex items-center justify-center">
                 <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
               </div>
             ) : (
-              <DataListTable tweets={activeTweets} locations={locations} requestTypes={requestTypes} />
+              <DataListTable tweets={allTweets} locations={allLocations} requestTypes={allRequestTypes} />
             )}
           </CardContent>
         </Card>

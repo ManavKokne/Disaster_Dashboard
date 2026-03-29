@@ -17,8 +17,20 @@ export async function POST(request) {
 
     const body = await request.json().catch(() => ({}));
     const limit = body?.limit ?? 10;
+    const retryFailed =
+      typeof body?.retryFailed === "boolean"
+        ? body.retryFailed
+        : process.env.GEOCODE_RETRY_FAILED === "1";
+    const retryMaxAttempts = Math.max(
+      1,
+      Math.min(Number(body?.retryMaxAttempts ?? process.env.GEOCODE_RETRY_MAX_ATTEMPTS) || 3, 10)
+    );
 
-    const result = await processPendingGeocodes(limit);
+    const result = await processPendingGeocodes({
+      limit,
+      retryFailed,
+      retryMaxAttempts,
+    });
 
     if (!result.success) {
       return NextResponse.json(

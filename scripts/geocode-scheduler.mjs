@@ -26,6 +26,11 @@ loadEnvFile(path.join(projectRoot, ".env.local"));
 
 const intervalMs = Number(process.env.GEOCODE_SCHEDULER_INTERVAL_MS || 5000);
 const batchLimit = Number(process.env.GEOCODE_BATCH_LIMIT || 10);
+const retryFailed = process.env.GEOCODE_RETRY_FAILED === "1";
+const retryMaxAttempts = Math.max(
+  1,
+  Math.min(Number(process.env.GEOCODE_RETRY_MAX_ATTEMPTS || 3), 10)
+);
 const workerSecret = process.env.GEOCODE_WORKER_SECRET || "";
 const baseUrl = process.env.GEOCODE_BASE_URL || "http://localhost:3000";
 
@@ -43,7 +48,11 @@ async function tick() {
         "Content-Type": "application/json",
         ...(workerSecret ? { "x-worker-secret": workerSecret } : {}),
       },
-      body: JSON.stringify({ limit: batchLimit }),
+      body: JSON.stringify({
+        limit: batchLimit,
+        retryFailed,
+        retryMaxAttempts,
+      }),
       cache: "no-store",
     });
 
@@ -81,7 +90,7 @@ function stop() {
 }
 
 console.log(
-  `[geocode-scheduler] started | interval=${intervalMs}ms | batch=${batchLimit} | target=${baseUrl}`
+  `[geocode-scheduler] started | interval=${intervalMs}ms | batch=${batchLimit} | retryFailed=${retryFailed} | retryMaxAttempts=${retryMaxAttempts} | target=${baseUrl}`
 );
 
 timer = setInterval(tick, intervalMs);

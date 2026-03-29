@@ -28,6 +28,10 @@ function isVoiceEnabled() {
   return String(process.env.TWILIO_VOICE_ENABLED ?? "true").toLowerCase() === "true";
 }
 
+function isSmsEnabled() {
+  return String(process.env.TWILIO_SMS_ENABLED ?? "true").toLowerCase() === "true";
+}
+
 export async function sendTwilioAlert(type, tweetData) {
   if (type !== "urgent") {
     return { success: true, skipped: true, message: "Twilio only sends urgent alerts" };
@@ -39,8 +43,21 @@ export async function sendTwilioAlert(type, tweetData) {
     return { success: false, message: "Twilio not configured" };
   }
 
-  const smsRecipients = parseRecipients(process.env.TWILIO_SMS_TO);
-  const callRecipients = parseRecipients(process.env.TWILIO_CALL_TO);
+  const voiceEnabled = isVoiceEnabled();
+  const smsEnabled = isSmsEnabled();
+
+  if (!voiceEnabled && !smsEnabled) {
+    return {
+      success: true,
+      skipped: true,
+      voiceEnabled,
+      smsEnabled,
+      message: "Twilio channels disabled by environment",
+    };
+  }
+
+  const smsRecipients = smsEnabled ? parseRecipients(process.env.TWILIO_SMS_TO) : [];
+  const callRecipients = voiceEnabled ? parseRecipients(process.env.TWILIO_CALL_TO) : [];
 
   if (smsRecipients.length === 0 && callRecipients.length === 0) {
     return { success: false, message: "No Twilio recipients configured" };
@@ -53,17 +70,18 @@ export async function sendTwilioAlert(type, tweetData) {
   const voiceName = process.env.TWILIO_VOICE_NAME || "alice";
   const loopCount = Number(process.env.TWILIO_VOICE_REPEAT || "2");
   const safeLoopCount = Number.isFinite(loopCount) && loopCount > 0 ? Math.min(loopCount, 5) : 2;
-  const voiceEnabled = isVoiceEnabled();
 
-  const smsResults = await Promise.allSettled(
-    smsRecipients.map((to) =>
-      client.messages.create({
-        from: fromNumber,
-        to,
-        body: alertText,
-      })
-    )
-  );
+  const smsResults = smsEnabled
+    ? await Promise.allSettled(
+        smsRecipients.map((to) =>
+          client.messages.create({
+            from: fromNumber,
+            to,
+            body: alertText,
+          })
+        )
+      )
+    : [];
 
   const callResults = voiceEnabled
     ? await Promise.allSettled(
@@ -80,6 +98,7 @@ export async function sendTwilioAlert(type, tweetData) {
   return {
     success: true,
     voiceEnabled,
+    smsEnabled,
     sms: smsResults.map((result) => (result.status === "fulfilled" ? { success: true } : { success: false, error: result.reason?.message || "SMS failed" })),
     calls: callResults.map((result) => (result.status === "fulfilled" ? { success: true } : { success: false, error: result.reason?.message || "Call failed" })),
   };

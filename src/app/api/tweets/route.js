@@ -9,10 +9,11 @@ export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
     const since = searchParams.get("since") || undefined;
+    const includeClosed = searchParams.get("includeClosed") === "1";
 
     await autoCloseResolvedTweets();
 
-    const tweets = await fetchTweets({ since });
+    const tweets = await fetchTweets({ since, includeClosed });
 
     const tweetsWithCoords = tweets.map((tweet) => ({
       ...tweet,

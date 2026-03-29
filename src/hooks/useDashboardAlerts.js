@@ -115,7 +115,7 @@ export default function useDashboardAlerts({ user, onToast } = {}) {
 
     const poll = async () => {
       try {
-        const response = await fetch("/api/tweets");
+        const response = await fetch("/api/tweets?includeClosed=1");
         if (!response.ok) {
           throw new Error("Failed to fetch tweets");
         }
@@ -310,6 +310,16 @@ export default function useDashboardAlerts({ user, onToast } = {}) {
     return Array.from(requestTypeSet).sort();
   }, [activeTweets]);
 
+  const allLocations = useMemo(() => {
+    const locationSet = new Set(tweets.map((item) => item.location).filter(Boolean));
+    return Array.from(locationSet).sort();
+  }, [tweets]);
+
+  const allRequestTypes = useMemo(() => {
+    const requestTypeSet = new Set(tweets.map((item) => item.request_type).filter(Boolean));
+    return Array.from(requestTypeSet).sort();
+  }, [tweets]);
+
   return {
     loadingData,
     loadError,
@@ -319,8 +329,11 @@ export default function useDashboardAlerts({ user, onToast } = {}) {
     handleResolve,
     handleClose,
     handleAcknowledge,
+    allTweets: tweets,
     activeTweets,
     locations,
     requestTypes,
+    allLocations,
+    allRequestTypes,
   };
 }

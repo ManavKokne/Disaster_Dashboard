@@ -156,7 +156,7 @@ export default function ChartAlertTimeline({ tweets, mode = "cumulative" }) {
             : "Alert Timeline (Cumulative)",
         font: { size: 14, weight: "600" },
         color: "#1e293b",
-        padding: { bottom: 12 },
+        padding: { top: 8, bottom: 12 },
       },
       tooltip: {
         backgroundColor: "#1e293b",
@@ -183,11 +183,17 @@ export default function ChartAlertTimeline({ tweets, mode = "cumulative" }) {
         },
       },
       y: {
+        beginAtZero: true,
         grid: { color: "#f1f5f9" },
         ticks: {
           color: "#64748b",
           font: { size: 11 },
-          beginAtZero: true,
+          precision: 0,
+          stepSize: 1,
+          callback: (value) => {
+            const numeric = Number(value);
+            return Number.isInteger(numeric) ? numeric : "";
+          },
         },
         title: {
           display: true,

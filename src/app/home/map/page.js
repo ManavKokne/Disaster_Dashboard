@@ -6,9 +6,10 @@ import { useAuth } from "@/context/AuthContext";
 import Navbar from "@/components/dashboard/Navbar";
 import MapContainer from "@/components/dashboard/MapContainer";
 import MapFilters from "@/components/dashboard/MapFilters";
+import MapFilterDrawer from "@/components/dashboard/MapFilterDrawer";
 import MapLegendCard from "@/components/dashboard/MapLegendCard";
 import { Card, CardContent } from "@/components/ui/card";
-import { Loader2 } from "lucide-react";
+import { Filter, Loader2 } from "lucide-react";
 import useDashboardAlerts from "@/hooks/useDashboardAlerts";
 
 export default function MapPage() {
@@ -16,6 +17,7 @@ export default function MapPage() {
   const router = useRouter();
 
   const [toasts, setToasts] = useState([]);
+  const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
   const [downloadingCsvType, setDownloadingCsvType] = useState("");
   const [nowMs, setNowMs] = useState(() => Date.now());
 
@@ -245,6 +247,27 @@ export default function MapPage() {
                   nowMs={nowMs}
                 />
               )}
+
+              {!loadingData && !loadError && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setIsFilterDrawerOpen(true)}
+                    className="absolute top-3 left-3 z-30 inline-flex items-center gap-2 rounded-md border border-sky-900 bg-sky-800 px-3 py-1.5 text-xs font-semibold text-white shadow-md hover:bg-sky-900 transition-colors lg:hidden"
+                  >
+                    <Filter className="h-3.5 w-3.5" />
+                    Filter
+                  </button>
+
+                  <MapLegendCard
+                    urgentCount={urgentCount}
+                    nonUrgentCount={nonUrgentCount}
+                    resolvedCount={resolvedCount}
+                    totalVisible={mapTweets.length}
+                    className="absolute top-3 right-3 z-30 lg:hidden"
+                  />
+                </>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -286,6 +309,37 @@ export default function MapPage() {
           </CardContent>
         </Card>
       </div>
+
+      <MapFilterDrawer
+        isOpen={isFilterDrawerOpen}
+        onClose={() => setIsFilterDrawerOpen(false)}
+      >
+        <MapFilters
+          locations={locations}
+          filterLocation={filterLocation}
+          setFilterLocation={setFilterLocation}
+          filterMarkerType={filterMarkerType}
+          setFilterMarkerType={setFilterMarkerType}
+          filterRequestType={filterRequestType}
+          setFilterRequestType={setFilterRequestType}
+          requestTypes={requestTypes}
+          filterAcknowledgement={filterAcknowledgement}
+          setFilterAcknowledgement={setFilterAcknowledgement}
+          filterTimeWindow={filterTimeWindow}
+          setFilterTimeWindow={setFilterTimeWindow}
+          visibleCount={mapTweets.length}
+          totalWithCoordinates={activeTweets.filter((t) => t.coordinates).length}
+          onReset={() => {
+            setFilterLocation("");
+            setFilterMarkerType("all");
+            setFilterRequestType("all");
+            setFilterAcknowledgement("all");
+            setFilterTimeWindow("all");
+          }}
+          onDownloadCsv={downloadCsv}
+          downloadingType={downloadingCsvType}
+        />
+      </MapFilterDrawer>
     </div>
   );
 }
