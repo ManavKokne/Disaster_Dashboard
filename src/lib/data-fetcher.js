@@ -11,6 +11,60 @@ function isUndefinedColumnError(error) {
   return error?.code === PG_UNDEFINED_COLUMN_ERROR_CODE;
 }
 
+function parseBooleanEnv(value, fallback = false) {
+  if (value == null || value === "") return fallback;
+  const normalized = String(value).trim().toLowerCase();
+  if (["1", "true", "yes", "y", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "n", "off"].includes(normalized)) return false;
+  return fallback;
+}
+
+function sanitizeConnectionString(connectionString) {
+  const parsedUrl = new URL(connectionString);
+
+  // Keep SSL behavior explicit in code to avoid pg sslmode parsing differences.
+  parsedUrl.searchParams.delete("sslmode");
+  parsedUrl.searchParams.delete("sslrootcert");
+  parsedUrl.searchParams.delete("sslcert");
+  parsedUrl.searchParams.delete("sslkey");
+  parsedUrl.searchParams.delete("uselibpqcompat");
+
+  return parsedUrl.toString();
+}
+
+function resolveConnectionConfig(connectionString) {
+  let sanitizedConnectionString = connectionString;
+  let ssl = { rejectUnauthorized: false };
+
+  try {
+    const parsedUrl = new URL(connectionString);
+    const host = (parsedUrl.hostname || "").toLowerCase();
+    const sslMode = (parsedUrl.searchParams.get("sslmode") || "").toLowerCase();
+    const dbSslMode = (process.env.DB_SSL_MODE || "auto").trim().toLowerCase();
+    const rejectUnauthorized = parseBooleanEnv(
+      process.env.DB_SSL_REJECT_UNAUTHORIZED,
+      false
+    );
+    const isLocalHost = host === "localhost" || host === "127.0.0.1" || host === "::1";
+    const shouldDisableSsl = dbSslMode === "disable" || isLocalHost || sslMode === "disable";
+
+    sanitizedConnectionString = sanitizeConnectionString(connectionString);
+
+    if (shouldDisableSsl) {
+      ssl = false;
+    } else {
+      ssl = { rejectUnauthorized };
+    }
+  } catch {
+    // Keep SSL enabled by default for hosted PostgreSQL providers.
+  }
+
+  return {
+    connectionString: sanitizedConnectionString,
+    ssl,
+  };
+}
+
 function getDbPool() {
   if (dbPool) return dbPool;
 
@@ -20,25 +74,12 @@ function getDbPool() {
     return null;
   }
 
-  let ssl = { rejectUnauthorized: false };
-
-  try {
-    const parsedUrl = new URL(connectionString);
-    const host = (parsedUrl.hostname || "").toLowerCase();
-    const sslMode = (parsedUrl.searchParams.get("sslmode") || "").toLowerCase();
-    const isLocalHost = host === "localhost" || host === "127.0.0.1" || host === "::1";
-
-    if (isLocalHost || sslMode === "disable") {
-      ssl = false;
-    }
-  } catch {
-    // Keep SSL enabled by default for hosted PostgreSQL providers.
-  }
+  const connectionConfig = resolveConnectionConfig(connectionString);
 
   dbPool = new Pool({
-    connectionString,
+    connectionString: connectionConfig.connectionString,
     max: 10,
-    ssl,
+    ssl: connectionConfig.ssl,
   });
 
   return dbPool;

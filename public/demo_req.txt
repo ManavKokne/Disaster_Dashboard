@@ -1,0 +1,11 @@
+Vercel is used to deploy the parent project
+Railway is used to reploy the worker service (Change the replica in settings to 0 (to stop worker) and to 1 (to resume the worker))
+Supabase is used to deploy the DB 
+
+Also note on each demo :
+Enable the worker (Also remember to disable it when not in use)
+Also update the Google Maps API in env for both : 
+Vercel 
+Railway
+
+Also note that twillio is on the brink of its credit please renew to new credentials for that
