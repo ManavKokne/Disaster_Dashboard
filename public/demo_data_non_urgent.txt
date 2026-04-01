@@ -1,0 +1,66 @@
+NOTE : To clear the table
+
+TRUNCATE TABLE tweets RESTART IDENTITY;
+
+NOTE : To insert the non urgent tweets
+
+SET 1 : 
+
+INSERT INTO tweets (content, location, request_type, urgency) VALUES
+('Need food assistance in Nashik.', 'Nashik', 'Food & Supplies', 'non-urgent'),
+('Looking for medical volunteers in Udaipur.', 'Udaipur', 'Medical', 'non-urgent'),
+('Shelter support required in Panaji.', 'Panaji', 'Shelter', 'non-urgent'),
+('Volunteers needed in Tirupati for aid distribution.', 'Tirupati', 'Humanitarian', 'non-urgent'),
+('Water supply needed in Bareilly.', 'Bareilly', 'Food & Supplies', 'non-urgent');
+
+SET 2 : 
+
+INSERT INTO tweets (content, location, request_type, urgency) VALUES
+('Medical supplies required in Salem.', 'Salem', 'Medical', 'non-urgent'),
+('NGO assistance needed in Jabalpur.', 'Jabalpur', 'Humanitarian', 'non-urgent'),
+('Looking for shelter homes in Aligarh.', 'Aligarh', 'Shelter', 'non-urgent'),
+('Food packets required in Kolhapur.', 'Kolhapur', 'Food & Supplies', 'non-urgent'),
+('Need paramedics in Warangal.', 'Warangal', 'Medical', 'non-urgent');
+
+SET 3 : 
+
+INSERT INTO tweets (content, location, request_type, urgency) VALUES
+('Relief volunteers needed in Ajmer.', 'Ajmer', 'Humanitarian', 'non-urgent'),
+('Temporary shelter required in Meerut.', 'Meerut', 'Shelter', 'non-urgent'),
+('Drinking water needed in Bhilai.', 'Bhilai', 'Food & Supplies', 'non-urgent'),
+('Medical camps requested in Durgapur.', 'Durgapur', 'Medical', 'non-urgent'),
+('Support needed for NGOs in Rourkela.', 'Rourkela', 'Humanitarian', 'non-urgent');
+
+SET 4 : 
+
+INSERT INTO tweets (content, location, request_type, urgency) VALUES
+('Blankets required in Nainital.', 'Nainital', 'Shelter', 'non-urgent'),
+('Food assistance required in Silchar.', 'Silchar', 'Food & Supplies', 'non-urgent'),
+('Medical help needed in Kakinada.', 'Kakinada', 'Medical', 'non-urgent'),
+('Volunteers needed in Jhansi.', 'Jhansi', 'Humanitarian', 'non-urgent'),
+('Shelter homes required in Dharamshala.', 'Dharamshala', 'Shelter', 'non-urgent');
+
+BULK NON URGENT : 
+
+INSERT INTO tweets (content, location, request_type, urgency) VALUES
+('Need food supplies in Nagpur area.', 'Nagpur', 'Food & Supplies', 'non-urgent'),
+('Looking for medical volunteers in Indore.', 'Indore', 'Medical', 'non-urgent'),
+('Require temporary shelter support in Jaipur.', 'Jaipur', 'Shelter', 'non-urgent'),
+('Volunteers needed in Surat for relief distribution.', 'Surat', 'Humanitarian', 'non-urgent'),
+('Water supply assistance required in Patna.', 'Patna', 'Food & Supplies', 'non-urgent'),
+('Medical kits required in Ranchi.', 'Ranchi', 'Medical', 'non-urgent'),
+('Looking for NGOs support in Chandigarh.', 'Chandigarh', 'Humanitarian', 'non-urgent'),
+('Need blankets and clothes in Shimla.', 'Shimla', 'Shelter', 'non-urgent'),
+('Volunteers required for food distribution in Lucknow.', 'Lucknow', 'Food & Supplies', 'non-urgent'),
+('Requesting medical checkup camps in Kanpur.', 'Kanpur', 'Medical', 'non-urgent'),
+('Need sanitation support in Varanasi.', 'Varanasi', 'Humanitarian', 'non-urgent'),
+('Looking for shelter homes in Dehradun.', 'Dehradun', 'Shelter', 'non-urgent'),
+('Require drinking water supply in Amritsar.', 'Amritsar', 'Food & Supplies', 'non-urgent'),
+('Medical assistance needed for elderly in Coimbatore.', 'Coimbatore', 'Medical', 'non-urgent'),
+('Volunteers needed for relief coordination in Madurai.', 'Madurai', 'Humanitarian', 'non-urgent'),
+('Need tents and shelter in Jodhpur.', 'Jodhpur', 'Shelter', 'non-urgent'),
+('Food packets required in Raipur.', 'Raipur', 'Food & Supplies', 'non-urgent'),
+('Looking for paramedics in Gwalior.', 'Gwalior', 'Medical', 'non-urgent'),
+('Require NGO support in Vijayawada.', 'Vijayawada', 'Humanitarian', 'non-urgent'),
+('Need temporary shelters in Agra.', 'Agra', 'Shelter', 'non-urgent');
+

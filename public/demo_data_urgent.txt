@@ -1,0 +1,65 @@
+NOTE : To clear the table
+
+TRUNCATE TABLE tweets RESTART IDENTITY;
+
+NOTE : To insert the urgent tweets
+
+SET 1 : 
+
+INSERT INTO tweets (content, location, request_type, urgency) VALUES
+('Critical medical support needed in Noida.', 'Noida', 'Medical', 'urgent'),
+('Food shortage in Aurangabad, urgent help needed.', 'Aurangabad', 'Food & Supplies', 'urgent'),
+('Immediate rescue needed in Tezpur.', 'Tezpur', 'Humanitarian', 'urgent'),
+('Emergency shelter required in Kargil.', 'Kargil', 'Shelter', 'urgent'),
+('Urgent need for doctors in Faridabad.', 'Faridabad', 'Medical', 'urgent');
+
+SET 2 : 
+
+INSERT INTO tweets (content, location, request_type, urgency) VALUES
+('Severe food crisis in Guntur.', 'Guntur', 'Food & Supplies', 'urgent'),
+('Immediate humanitarian aid needed in Aizawl.', 'Aizawl', 'Humanitarian', 'urgent'),
+('Families stranded in Ooty need shelter urgently.', 'Ooty', 'Shelter', 'urgent'),
+('Emergency medical kits needed in Hubli.', 'Hubli', 'Medical', 'urgent'),
+('Food packets urgently required in Tirunelveli.', 'Tirunelveli', 'Food & Supplies', 'urgent');
+
+SET 3 : 
+
+INSERT INTO tweets (content, location, request_type, urgency) VALUES
+('Rescue teams urgently required in Port Blair.', 'Port Blair', 'Humanitarian', 'urgent'),
+('Shelter needed immediately in Kodaikanal.', 'Kodaikanal', 'Shelter', 'urgent'),
+('Critical care needed in Bikaner.', 'Bikaner', 'Medical', 'urgent'),
+('Food shortage in Haldwani, urgent help required.', 'Haldwani', 'Food & Supplies', 'urgent'),
+('Urgent NGO coordination needed in Dimapur.', 'Dimapur', 'Humanitarian', 'urgent');
+
+SET 4 : 
+
+INSERT INTO tweets (content, location, request_type, urgency) VALUES
+('Emergency shelter required in Pahalgam.', 'Pahalgam', 'Shelter', 'urgent'),
+('Immediate blood requirement in Rajkot.', 'Rajkot', 'Medical', 'urgent'),
+('Food crisis reported in Muzaffarpur.', 'Muzaffarpur', 'Food & Supplies', 'urgent'),
+('Urgent volunteers needed in Itanagar.', 'Itanagar', 'Humanitarian', 'urgent'),
+('Displaced families need shelter in Lonavala.', 'Lonavala', 'Shelter', 'urgent');
+
+BULK SET : 
+
+INSERT INTO tweets (content, location, request_type, urgency) VALUES
+('Immediate medical help needed in Delhi.', 'Delhi', 'Medical', 'urgent'),
+('Food shortage reported in Hyderabad, urgent support required.', 'Hyderabad', 'Food & Supplies', 'urgent'),
+('Urgent rescue needed in flood-hit Assam region.', 'Assam', 'Humanitarian', 'urgent'),
+('Critical need for shelter in Srinagar due to heavy rains.', 'Srinagar', 'Shelter', 'urgent'),
+('Medical emergency in Kolkata, need doctors urgently.', 'Kolkata', 'Medical', 'urgent'),
+('Severe food crisis in Ahmedabad, immediate help required.', 'Ahmedabad', 'Food & Supplies', 'urgent'),
+('Urgent humanitarian assistance required in Imphal.', 'Imphal', 'Humanitarian', 'urgent'),
+('Families stranded in Manali need shelter urgently.', 'Manali', 'Shelter', 'urgent'),
+('Immediate need for oxygen cylinders in Pune.', 'Pune', 'Medical', 'urgent'),
+('Food distribution urgently needed in Mumbai slums.', 'Mumbai', 'Food & Supplies', 'urgent'),
+('Rescue teams required immediately in Uttarakhand hills.', 'Uttarakhand', 'Humanitarian', 'urgent'),
+('Emergency shelter required in Leh due to snowfall.', 'Leh', 'Shelter', 'urgent'),
+('Critical patients need transport in Bangalore.', 'Bangalore', 'Medical', 'urgent'),
+('Food packets urgently needed in Visakhapatnam.', 'Visakhapatnam', 'Food & Supplies', 'urgent'),
+('Urgent NGO coordination required in Tripura.', 'Tripura', 'Humanitarian', 'urgent'),
+('Displaced families need shelter in Kullu.', 'Kullu', 'Shelter', 'urgent'),
+('Immediate blood donation required in Chennai.', 'Chennai', 'Medical', 'urgent'),
+('Hunger crisis reported in Dhanbad, urgent supplies needed.', 'Dhanbad', 'Food & Supplies', 'urgent'),
+('Emergency volunteers needed in Siliguri.', 'Siliguri', 'Humanitarian', 'urgent'),
+('Urgent housing needed for flood victims in Kozhikode.', 'Kozhikode', 'Shelter', 'urgent');
