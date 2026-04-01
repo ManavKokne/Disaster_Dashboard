@@ -1,29 +1,49 @@
-show databases;
-use disaster;
+-- PostgreSQL schema + sample data with detailed locations.
 
 CREATE TABLE IF NOT EXISTS tweets (
-    id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    id SERIAL PRIMARY KEY,
     content TEXT NOT NULL,
     location VARCHAR(255) NOT NULL,
-    request_type VARCHAR(100) DEFAULT NULL,
-    urgency ENUM('urgent', 'non-urgent') NOT NULL,
-    is_resolved BOOLEAN NOT NULL DEFAULT FALSE,
-    resolved_at DATETIME NULL,
-    is_closed BOOLEAN NOT NULL DEFAULT FALSE,
-    closed_at DATETIME NULL,
-    timestamp DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    request_type VARCHAR(100),
+    urgency VARCHAR(20) NOT NULL CHECK (urgency IN ('urgent', 'non-urgent')),
     is_acknowledged BOOLEAN NOT NULL DEFAULT FALSE,
-    PRIMARY KEY (id),
-    INDEX idx_active_polling (is_closed, timestamp),
-    INDEX idx_urgency (urgency)
+    is_resolved BOOLEAN NOT NULL DEFAULT FALSE,
+    resolved_at TIMESTAMP NULL,
+    is_closed BOOLEAN NOT NULL DEFAULT FALSE,
+    closed_at TIMESTAMP NULL,
+    latitude NUMERIC(10, 8) NULL,
+    longitude NUMERIC(11, 8) NULL,
+    geocode_status VARCHAR(20) NOT NULL DEFAULT 'pending'
+        CHECK (
+            geocode_status = 'pending'
+            OR geocode_status = 'done'
+            OR geocode_status = 'failed'
+            OR geocode_status LIKE 'failed_%'
+        ),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-ALTER TABLE tweets ADD COLUMN is_acknowledged BOOLEAN DEFAULT 0;
+CREATE INDEX IF NOT EXISTS idx_active_polling ON tweets (is_closed, created_at);
+CREATE INDEX IF NOT EXISTS idx_urgency ON tweets (urgency);
 
-select * from tweets;
-TRUNCATE TABLE tweets;
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
-INSERT INTO tweets (content, location, request_type, urgency) VALUES 
+DROP TRIGGER IF EXISTS tweets_set_updated_at ON tweets;
+CREATE TRIGGER tweets_set_updated_at
+BEFORE UPDATE ON tweets
+FOR EACH ROW
+EXECUTE FUNCTION set_updated_at();
+
+TRUNCATE TABLE tweets RESTART IDENTITY;
+
+INSERT INTO tweets (content, location, request_type, urgency) VALUES
 ('Medical emergency reported in Bhopal. Need Medical.', 'MP Nagar Zone 1, Bhopal, Madhya Pradesh', 'Medical', 'non-urgent'),
 ('Looking for volunteers in Bhubaneswar for Food & Supplies help.', 'Patia, Bhubaneswar, Odisha', 'Food & Supplies', 'non-urgent'),
 ('Looking for volunteers in Guwahati for Humanitarian help.', 'GS Road, Dispur, Guwahati, Assam', 'Humanitarian', 'non-urgent'),
@@ -35,13 +55,9 @@ INSERT INTO tweets (content, location, request_type, urgency) VALUES
 ('Children in Mumbai require urgent Humanitarian support.', 'Andheri West, Mumbai, Maharashtra', 'Humanitarian', 'non-urgent'),
 ('Need immediate assistance in Bengaluru. Situation critical.', 'BTM Layout 2nd Stage, Bengaluru, Karnataka', 'Medical', 'non-urgent');
 
-INSERT INTO tweets (content, location, request_type, urgency) VALUES 
-('Supplies running low in Pune, need Humanitarian.', 'FC Road, Shivajinagar, Pune, Maharashtra', 'Humanitarian', 'urgent');
-
-INSERT INTO tweets (content, location, request_type, urgency) VALUES 
-('Supplies running low in Mysuru, need Humanitarian.', 'VV Mohalla, Mysuru, Karnataka', 'Humanitarian', 'urgent');
-
-INSERT INTO tweets (content, location, request_type, urgency) VALUES 
+INSERT INTO tweets (content, location, request_type, urgency) VALUES
+('Supplies running low in Pune, need Humanitarian.', 'FC Road, Shivajinagar, Pune, Maharashtra', 'Humanitarian', 'urgent'),
+('Supplies running low in Mysuru, need Humanitarian.', 'VV Mohalla, Mysuru, Karnataka', 'Humanitarian', 'urgent'),
 ('Requesting Humanitarian support in Bhubaneswar. Please help.', 'Khandagiri, Bhubaneswar, Odisha', 'Humanitarian', 'urgent'),
 ('Children in Noida require urgent Food & Supplies support.', 'Sector 62, Noida, Uttar Pradesh', 'Food & Supplies', 'urgent'),
 ('Senior citizens need Humanitarian assistance in Pune.', 'Kothrud, Pune, Maharashtra', 'Humanitarian', 'urgent'),

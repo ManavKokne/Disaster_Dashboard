@@ -1,35 +1,44 @@
 import fs from "fs";
 import path from "path";
 import Papa from "papaparse";
-import mysql from "mysql2/promise";
+import { Pool } from "pg";
 
 const CSV_DIR = path.join(process.cwd(), "public");
-const GEOCODE_API_URL = "https://maps.googleapis.com/maps/api/geocode/json";
+const PG_UNDEFINED_COLUMN_ERROR_CODE = "42703";
 let dbPool;
+
+function isUndefinedColumnError(error) {
+  return error?.code === PG_UNDEFINED_COLUMN_ERROR_CODE;
+}
 
 function getDbPool() {
   if (dbPool) return dbPool;
 
-  const hasConfig =
-    process.env.DB_HOST &&
-    process.env.DB_USER &&
-    process.env.DB_PASSWORD &&
-    process.env.DB_NAME;
+  const connectionString = process.env.DATABASE_URL;
 
-  if (!hasConfig) {
+  if (!connectionString) {
     return null;
   }
 
-  dbPool = mysql.createPool({
-    host: process.env.DB_HOST,
-    port: parseInt(process.env.DB_PORT || "3306", 10),
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0,
-    timezone: "Z",
+  let ssl = { rejectUnauthorized: false };
+
+  try {
+    const parsedUrl = new URL(connectionString);
+    const host = (parsedUrl.hostname || "").toLowerCase();
+    const sslMode = (parsedUrl.searchParams.get("sslmode") || "").toLowerCase();
+    const isLocalHost = host === "localhost" || host === "127.0.0.1" || host === "::1";
+
+    if (isLocalHost || sslMode === "disable") {
+      ssl = false;
+    }
+  } catch {
+    // Keep SSL enabled by default for hosted PostgreSQL providers.
+  }
+
+  dbPool = new Pool({
+    connectionString,
+    max: 10,
+    ssl,
   });
 
   return dbPool;
@@ -76,12 +85,12 @@ async function fetchTweetsFromSql({ since, includeClosed = false } = {}) {
 
   const baseConditions = [];
   if (!includeClosed) {
-    baseConditions.push("is_closed = 0");
+    baseConditions.push("is_closed = FALSE");
   }
   const params = [];
   if (since) {
-    baseConditions.push("created_at > ?");
     params.push(since);
+    baseConditions.push(`created_at > $${params.length}`);
   }
 
   const whereSql = baseConditions.length > 0 ? `WHERE ${baseConditions.join(" AND ")}` : "";
@@ -135,11 +144,11 @@ async function fetchTweetsFromSql({ since, includeClosed = false } = {}) {
 
   for (const query of queries) {
     try {
-      const [rows] = await pool.query(query, params);
+      const { rows } = await pool.query(query, params);
       return rows.map(normalizeTweetRow);
     } catch (error) {
       lastError = error;
-      if (error?.code !== "ER_BAD_FIELD_ERROR") {
+      if (!isUndefinedColumnError(error)) {
         throw error;
       }
     }
@@ -159,19 +168,19 @@ export async function fetchTweetsForCsvExport(markerType = "all") {
 
   if (normalizedType === "urgent") {
     whereClauses.push(
-      "LOWER(COALESCE(urgency, '')) = 'urgent' AND COALESCE(is_resolved, 0) = 0"
+      "LOWER(COALESCE(urgency, '')) = 'urgent' AND COALESCE(is_resolved, FALSE) = FALSE"
     );
   }
 
   if (normalizedType === "non-urgent") {
     whereClauses.push(
-      "LOWER(COALESCE(urgency, '')) <> 'urgent' AND COALESCE(is_resolved, 0) = 0"
+      "LOWER(COALESCE(urgency, '')) <> 'urgent' AND COALESCE(is_resolved, FALSE) = FALSE"
     );
   }
 
   if (normalizedType === "resolved") {
     whereClauses.push(
-      "COALESCE(is_resolved, 0) = 1 OR LOWER(COALESCE(urgency, '')) = 'resolved'"
+      "COALESCE(is_resolved, FALSE) = TRUE OR LOWER(COALESCE(urgency, '')) = 'resolved'"
     );
   }
 
@@ -226,14 +235,14 @@ export async function fetchTweetsForCsvExport(markerType = "all") {
 
   for (const query of queries) {
     try {
-      const [rows] = await pool.query(query);
+      const { rows } = await pool.query(query);
       return {
         success: true,
         rows: rows.map(normalizeTweetRow),
       };
     } catch (error) {
       lastError = error;
-      if (error?.code !== "ER_BAD_FIELD_ERROR") {
+      if (!isUndefinedColumnError(error)) {
         return { success: false, message: error.message || "SQL query failed", rows: [] };
       }
     }
@@ -291,212 +300,6 @@ export async function fetchTweets(options = {}) {
   return fetchTweetsFromCsv(options);
 }
 
-async function geocodeLocationWithGoogle(location) {
-  const apiKey =
-    process.env.GOOGLE_MAPS_GEOCODING_API_KEY ||
-    process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-
-  if (!apiKey || !location) {
-    return null;
-  }
-
-  const params = new URLSearchParams({
-    address: location,
-    key: apiKey,
-    region: "in",
-  });
-
-  const response = await fetch(`${GEOCODE_API_URL}?${params.toString()}`, {
-    method: "GET",
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    throw new Error(`Geocoding API failed with status ${response.status}`);
-  }
-
-  const payload = await response.json();
-  const first = payload?.results?.[0]?.geometry?.location;
-
-  if (!first) return null;
-
-  return {
-    latitude: Number(first.lat),
-    longitude: Number(first.lng),
-  };
-}
-
-export async function processPendingGeocodes(input = 10) {
-  const pool = getDbPool();
-  if (!pool) {
-    return { success: false, message: "SQL not configured", processed: 0 };
-  }
-
-  const options =
-    typeof input === "object" && input !== null ? input : { limit: input };
-
-  const retryFailed =
-    typeof options.retryFailed === "boolean"
-      ? options.retryFailed
-      : process.env.GEOCODE_RETRY_FAILED === "1";
-
-  const retryMaxAttempts = Math.max(
-    1,
-    Math.min(Number(options.retryMaxAttempts ?? process.env.GEOCODE_RETRY_MAX_ATTEMPTS) || 3, 10)
-  );
-
-  const parsedLimit = Math.max(1, Math.min(Number(options.limit) || 10, 100));
-
-  const statusCondition = retryFailed
-    ? "AND (geocode_status = 'pending' OR geocode_status LIKE 'failed%')"
-    : "AND geocode_status = 'pending'";
-
-  const parseAttemptCount = (status) => {
-    const normalized = String(status || "").trim().toLowerCase();
-    if (!normalized || normalized === "pending" || normalized === "done") return 0;
-    if (normalized === "failed") return 1;
-
-    const match = normalized.match(/^failed_(\d+)$/);
-    if (match) {
-      const parsed = Number(match[1]);
-      return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
-    }
-
-    if (normalized.startsWith("failed")) return 1;
-    return 0;
-  };
-
-  const toFailedStatus = (attempt) => {
-    if (attempt <= 1) return "failed";
-    return `failed_${attempt}`;
-  };
-
-  const queryWithStatus = `
-    SELECT id, location, geocode_status
-    FROM tweets
-    WHERE location IS NOT NULL
-      AND location <> ''
-      AND latitude IS NULL
-      ${statusCondition}
-    ORDER BY id ASC
-    LIMIT ?
-  `;
-
-  const queryWithoutStatus = `
-    SELECT id, location
-    FROM tweets
-    WHERE location IS NOT NULL
-      AND location <> ''
-      AND latitude IS NULL
-    ORDER BY id ASC
-    LIMIT ?
-  `;
-
-  let rows = [];
-  let hasStatusColumn = true;
-
-  try {
-    const [resultRows] = await pool.query(queryWithStatus, [parsedLimit]);
-    rows = resultRows;
-
-    if (retryFailed) {
-      rows = rows
-        .filter((row) => parseAttemptCount(row.geocode_status) < retryMaxAttempts)
-        .slice(0, parsedLimit);
-    }
-  } catch (error) {
-    if (error?.code !== "ER_BAD_FIELD_ERROR") throw error;
-    hasStatusColumn = false;
-    try {
-      const [resultRows] = await pool.query(queryWithoutStatus, [parsedLimit]);
-      rows = resultRows;
-    } catch (fallbackError) {
-      if (fallbackError?.code === "ER_BAD_FIELD_ERROR") {
-        return {
-          success: false,
-          message:
-            "Missing latitude/longitude columns. Apply the latest tweets table migration first.",
-          processed: 0,
-        };
-      }
-      throw fallbackError;
-    }
-  }
-
-  let processed = 0;
-  let success = 0;
-  let failed = 0;
-
-  for (const row of rows) {
-    processed += 1;
-    const currentAttempt = hasStatusColumn ? parseAttemptCount(row.geocode_status) : 0;
-
-    try {
-      const coords = await geocodeLocationWithGoogle(row.location);
-
-      if (coords) {
-        if (hasStatusColumn) {
-          await pool.query(
-            `
-            UPDATE tweets
-            SET latitude = ?, longitude = ?, geocode_status = 'done'
-            WHERE id = ?
-            `,
-            [coords.latitude, coords.longitude, row.id]
-          );
-        } else {
-          await pool.query(
-            `
-            UPDATE tweets
-            SET latitude = ?, longitude = ?
-            WHERE id = ?
-            `,
-            [coords.latitude, coords.longitude, row.id]
-          );
-        }
-        success += 1;
-      } else {
-        if (hasStatusColumn) {
-          const nextAttempt = currentAttempt + 1;
-          await pool.query(
-            `
-            UPDATE tweets
-            SET geocode_status = ?
-            WHERE id = ?
-            `,
-            [toFailedStatus(nextAttempt), row.id]
-          );
-        }
-        failed += 1;
-      }
-    } catch (error) {
-      if (hasStatusColumn) {
-        const nextAttempt = currentAttempt + 1;
-        await pool.query(
-          `
-          UPDATE tweets
-          SET geocode_status = ?
-          WHERE id = ?
-          `,
-          [toFailedStatus(nextAttempt), row.id]
-        );
-      }
-      failed += 1;
-      console.error(`Geocode failed for tweet ${row.id}:`, error.message);
-    }
-  }
-
-  return {
-    success: true,
-    processed,
-    geocoded: success,
-    failed,
-    retryFailed,
-    retryMaxAttempts,
-    statusColumnEnabled: hasStatusColumn,
-  };
-}
-
 export async function updateTweetStatus(id, action) {
   const pool = getDbPool();
   if (!pool) {
@@ -513,18 +316,18 @@ export async function updateTweetStatus(id, action) {
         await pool.query(
           `
           UPDATE tweets
-          SET is_resolved = 1, resolved_at = NOW()
-          WHERE id = ?
+          SET is_resolved = TRUE, resolved_at = NOW()
+          WHERE id = $1
           `,
           [id]
         );
       } catch (error) {
-        if (error?.code !== "ER_BAD_FIELD_ERROR") throw error;
+        if (!isUndefinedColumnError(error)) throw error;
         await pool.query(
           `
           UPDATE tweets
-          SET is_resolved = 1
-          WHERE id = ?
+          SET is_resolved = TRUE
+          WHERE id = $1
           `,
           [id]
         );
@@ -536,13 +339,13 @@ export async function updateTweetStatus(id, action) {
         await pool.query(
           `
           UPDATE tweets
-          SET is_acknowledged = 1
-          WHERE id = ?
+          SET is_acknowledged = TRUE
+          WHERE id = $1
           `,
           [id]
         );
       } catch (error) {
-        if (error?.code !== "ER_BAD_FIELD_ERROR") throw error;
+        if (!isUndefinedColumnError(error)) throw error;
         // Column might not exist yet, just return success
         console.warn("is_acknowledged column not found, consider running database migration");
       }
@@ -553,18 +356,18 @@ export async function updateTweetStatus(id, action) {
         await pool.query(
           `
           UPDATE tweets
-          SET is_closed = 1, closed_at = NOW()
-          WHERE id = ?
+          SET is_closed = TRUE, closed_at = NOW()
+          WHERE id = $1
           `,
           [id]
         );
       } catch (error) {
-        if (error?.code !== "ER_BAD_FIELD_ERROR") throw error;
+        if (!isUndefinedColumnError(error)) throw error;
         await pool.query(
           `
           UPDATE tweets
-          SET is_closed = 1
-          WHERE id = ?
+          SET is_closed = TRUE
+          WHERE id = $1
           `,
           [id]
         );
@@ -586,15 +389,15 @@ export async function autoCloseResolvedTweets() {
     await pool.query(
       `
       UPDATE tweets
-      SET is_closed = 1, closed_at = COALESCE(closed_at, NOW())
-      WHERE is_resolved = 1
-        AND is_closed = 0
+      SET is_closed = TRUE, closed_at = COALESCE(closed_at, NOW())
+      WHERE is_resolved = TRUE
+        AND is_closed = FALSE
         AND resolved_at IS NOT NULL
-        AND resolved_at <= (NOW() - INTERVAL 5 MINUTE)
+        AND resolved_at <= (NOW() - INTERVAL '5 minutes')
       `
     );
   } catch (error) {
-    if (error?.code !== "ER_BAD_FIELD_ERROR") {
+    if (!isUndefinedColumnError(error)) {
       console.error("Auto-close update failed:", error.message);
       return;
     }
@@ -603,10 +406,10 @@ export async function autoCloseResolvedTweets() {
       await pool.query(
         `
         UPDATE tweets
-        SET is_closed = 1
-        WHERE is_resolved = 1
-          AND is_closed = 0
-          AND created_at <= (NOW() - INTERVAL 5 MINUTE)
+        SET is_closed = TRUE
+        WHERE is_resolved = TRUE
+          AND is_closed = FALSE
+          AND created_at <= (NOW() - INTERVAL '5 minutes')
         `
       );
     } catch (fallbackError) {

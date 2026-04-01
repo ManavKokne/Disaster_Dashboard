@@ -37,7 +37,7 @@ These rules define the required production-like behavior for alert detection, no
 - Fallback behavior must be graceful and should not crash the dashboard.
 
 ### 3.2 Required Database
-- Database name: `disaster`
+- Database: from `DATABASE_URL` (Supabase default is typically `postgres`)
 - Table name: `tweets`
 
 ### 3.3 Required Table Fields
@@ -46,10 +46,10 @@ These rules define the required production-like behavior for alert detection, no
 | `content` | TEXT | Tweet or alert text content |
 | `location` | VARCHAR | Location string or coordinates payload |
 | `request_type` | VARCHAR | Alert category |
-| `urgency` | ENUM | Allowed values only: `urgent`, `non-urgent` |
+| `urgency` | VARCHAR(20) | Allowed values only: `urgent`, `non-urgent` |
 | `is_resolved` | BOOLEAN | Updated by frontend resolve action |
 | `is_closed` | BOOLEAN | Default `false`; set `true` on close |
-| `timestamp` | DATETIME | Default `CURRENT_TIMESTAMP` |
+| `timestamp` | TIMESTAMP | Default `CURRENT_TIMESTAMP` |
 
 ## 4. Polling and Incremental Fetch Rules
 ### 4.1 Polling Strategy
@@ -76,7 +76,7 @@ These rules define the required production-like behavior for alert detection, no
 
 ## 6. Demo Data and Simulation Rules
 - Initial table state should contain multiple `non-urgent` rows.
-- Demo new alerts are inserted manually via MySQL Workbench as `urgent` rows.
+- Demo new alerts are inserted manually via Supabase SQL Editor (or `psql`) as `urgent` rows.
 - Polling flow must detect these new rows and trigger alert handling without page reload.
 
 ## 7. Reliability and Safety Rules

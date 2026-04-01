@@ -1,76 +1,75 @@
--- Create and select the database
-CREATE DATABASE IF NOT EXISTS disaster;
-USE disaster;
+-- PostgreSQL schema and seed script for disaster.tweets
 
--- Create the tweets table with lifecycle tracking
 CREATE TABLE IF NOT EXISTS tweets (
-    id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    id SERIAL PRIMARY KEY,
     content TEXT NOT NULL,
     location VARCHAR(255) NOT NULL,
-    request_type VARCHAR(100) DEFAULT NULL,
-    urgency ENUM('urgent', 'non-urgent') NOT NULL,
+    request_type VARCHAR(100),
+    urgency VARCHAR(20) NOT NULL CHECK (urgency IN ('urgent', 'non-urgent')),
 
     -- Status fields
     is_acknowledged BOOLEAN NOT NULL DEFAULT FALSE,
     is_resolved BOOLEAN NOT NULL DEFAULT FALSE,
-    resolved_at DATETIME NULL,
+    resolved_at TIMESTAMP NULL,
     is_closed BOOLEAN NOT NULL DEFAULT FALSE,
-    closed_at DATETIME NULL,
+    closed_at TIMESTAMP NULL,
 
     -- Geolocation fields (filled by async worker)
-    latitude DECIMAL(10,8) NULL,
-    longitude DECIMAL(11,8) NULL,
-    geocode_status ENUM('pending', 'done', 'failed') NOT NULL DEFAULT 'pending',
+    latitude NUMERIC(10, 8) NULL,
+    longitude NUMERIC(11, 8) NULL,
+    geocode_status VARCHAR(20) NOT NULL DEFAULT 'pending'
+        CHECK (
+            geocode_status = 'pending'
+            OR geocode_status = 'done'
+            OR geocode_status = 'failed'
+            OR geocode_status LIKE 'failed_%'
+        ),
 
     -- Audit timestamps
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-
-    PRIMARY KEY (id),
-    INDEX idx_active_polling (is_closed, created_at),
-    INDEX idx_urgency (urgency),
-    INDEX idx_geocode (geocode_status),
-    INDEX idx_location (latitude, longitude)
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Completely clear the table for a fresh start
-TRUNCATE TABLE tweets;
+CREATE INDEX IF NOT EXISTS idx_active_polling ON tweets (is_closed, created_at);
+CREATE INDEX IF NOT EXISTS idx_urgency ON tweets (urgency);
+CREATE INDEX IF NOT EXISTS idx_geocode ON tweets (geocode_status);
+CREATE INDEX IF NOT EXISTS idx_location ON tweets (latitude, longitude);
 
--- Insert Non-Urgent Entries (Initial State)
-INSERT INTO tweets (content, location, request_type, urgency) VALUES 
+-- Keep updated_at current on every row update.
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS tweets_set_updated_at ON tweets;
+CREATE TRIGGER tweets_set_updated_at
+BEFORE UPDATE ON tweets
+FOR EACH ROW
+EXECUTE FUNCTION set_updated_at();
+
+-- Completely clear the table for a fresh start.
+TRUNCATE TABLE tweets RESTART IDENTITY;
+
+-- Insert non-urgent entries (initial state).
+INSERT INTO tweets (content, location, request_type, urgency) VALUES
 ('Medical emergency reported in Bhopal. Need Medical.', 'Bhopal', 'Medical', 'non-urgent'),
 ('Looking for volunteers in Bhubaneswar for Food & Supplies help.', 'Bhubaneswar', 'Food & Supplies', 'non-urgent'),
 ('Looking for volunteers in Guwahati for Humanitarian help.', 'Guwahati', 'Humanitarian', 'non-urgent');
 
--- Insert Urgent Entries (Simulate Alert)
-INSERT INTO tweets (content, location, request_type, urgency) VALUES 
+-- Insert urgent entries (simulate alert).
+INSERT INTO tweets (content, location, request_type, urgency) VALUES
 ('Supplies running low in Mysuru, need Humanitarian.', 'Mysuru', 'Humanitarian', 'urgent'),
 ('Requesting Humanitarian support in Bhubaneswar. Please help.', 'Bhubaneswar', 'Humanitarian', 'urgent');
 
-
-
-NON Urgent
-INSERT INTO tweets (content, location, request_type, urgency) VALUES 
-('Medical emergency reported in Bhopal. Need Medical.', 'Bhopal', 'Medical', 'non-urgent'),
-('Looking for volunteers in Bhubaneswar for Food & Supplies help.', 'Bhubaneswar', 'Food & Supplies', 'non-urgent'),
-('Looking for volunteers in Guwahati for Humanitarian help.', 'Guwahati', 'Humanitarian', 'non-urgent'),
-('Medical emergency reported in Goa. Need Medical.', 'Goa', 'Medical', 'non-urgent'),
-('Senior citizens need Food & Supplies assistance in Hyderabad.', 'Hyderabad', 'Food & Supplies', 'non-urgent'),
-('Family stranded in Aizawl, require Medical.', 'Aizawl', 'Medical', 'non-urgent'),
-('Supplies running low in Chennai, need Medical.', 'Chennai', 'Medical', 'non-urgent'),
-('Requesting Medical support in Kolkata. Please help.', 'Kolkata', 'Medical', 'non-urgent'),
-('Children in Mumbai require urgent Humanitarian support.', 'Mumbai', 'Humanitarian', 'non-urgent'),
-('Need immediate assistance in Bengaluru. Situation critical.', 'Bengaluru', 'Medical', 'non-urgent');
-
-Urgent
-INSERT INTO tweets (content, location, request_type, urgency) VALUES 
-('Supplies running low in Mysuru, need Humanitarian.', 'Mysuru', 'Humanitarian', 'urgent'),
-('Requesting Humanitarian support in Bhubaneswar. Please help.', 'Bhubaneswar', 'Humanitarian', 'urgent'),
-('Requesting Food & Supplies support in Bhubaneswar. Please help.', 'Bhubaneswar', 'Food & Supplies', 'urgent'),
-('Children in Noida require urgent Food & Supplies support.', 'Noida', 'Food & Supplies', 'urgent'),
-('Senior citizens need Humanitarian assistance in Pune.', 'Pune', 'Humanitarian', 'urgent'),
-('Family stranded in Itanagar, require Humanitarian.', 'Itanagar', 'Humanitarian', 'urgent'),
-('Supplies running low in Vadodara, need Food & Supplies.', 'Vadodara', 'Food & Supplies', 'urgent'),
-('Looking for volunteers in Jammu for Food & Supplies help.', 'Jammu', 'Food & Supplies', 'urgent'),
-('Senior citizens need Medical assistance in Mumbai.', 'Mumbai', 'Medical', 'urgent'),
-('Looking for volunteers in Srinagar for Food & Supplies help.', 'Srinagar', 'Food & Supplies', 'urgent');
+-- PostgreSQL upsert pattern.
+INSERT INTO tweets (id, content, location, request_type, urgency)
+VALUES (1, 'Updated emergency report', 'Bhopal', 'Medical', 'urgent')
+ON CONFLICT (id)
+DO UPDATE SET
+    content = EXCLUDED.content,
+    location = EXCLUDED.location,
+    request_type = EXCLUDED.request_type,
+    urgency = EXCLUDED.urgency;
