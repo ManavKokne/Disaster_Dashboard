@@ -74,6 +74,8 @@ Common optional:
 - WORKER_MAX_ATTEMPTS (default 3)
 - WORKER_RETRY_FAILED (default true)
 - WORKER_DB_POOL_MAX (default 10)
+- WORKER_DB_SSL_MODE (default auto)
+- WORKER_DB_SSL_REJECT_UNAUTHORIZED (default false)
 - GEOCODE_REGION (default in)
 - GEOCODE_REQUEST_TIMEOUT_MS (default 10000)
 
@@ -110,6 +112,10 @@ Recommended Render settings:
 - Auto deploy on commit: enabled
 - Health checks: not required for background workers
 - Restart policy: default (always)
+
+Render SSL note:
+- If your runtime reports self-signed certificate chain errors, keep WORKER_DB_SSL_REJECT_UNAUTHORIZED=false.
+- The worker strips sslmode from DATABASE_URL and applies SSL behavior from worker settings.
 
 ## Operational Notes
 
