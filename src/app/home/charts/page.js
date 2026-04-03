@@ -11,6 +11,7 @@ import ChartUrgencyDistribution from "@/components/dashboard/ChartUrgencyDistrib
 import { Card, CardContent } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
+import { getUrgencyMeta } from "@/lib/urgency";
 
 export default function ChartsPage() {
   const { user, loading: authLoading } = useAuth();
@@ -63,7 +64,7 @@ export default function ChartsPage() {
 
   const activeCount = tweets.filter((t) => !t.is_closed).length;
   const urgentActiveCount = tweets.filter(
-    (t) => (t.urgency || "").toLowerCase() === "urgent" && !t.is_closed && !t.is_resolved
+    (tweet) => getUrgencyMeta(tweet).label === "urgent" && !tweet.is_closed && !tweet.is_resolved
   ).length;
   const resolvedCount = tweets.filter((t) => t.is_resolved && !t.is_closed).length;
 

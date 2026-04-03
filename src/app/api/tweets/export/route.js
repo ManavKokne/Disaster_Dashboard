@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { fetchTweetsForCsvExport } from "@/lib/data-fetcher";
 
-function normalizeMarkerType(markerType) {
-  const value = String(markerType || "all").trim().toLowerCase();
-  if (["all", "urgent", "non-urgent", "resolved"].includes(value)) {
-    return value;
-  }
-  return "all";
+function parseUrgencyLabels(rawValue) {
+  if (!rawValue) return [];
+
+  return String(rawValue)
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
 }
 
 function csvEscape(value) {
@@ -21,7 +22,8 @@ function rowsToCsv(rows) {
     "tweet",
     "location",
     "request_type",
-    "urgency",
+    "urgency_label",
+    "urgency_score",
     "is_resolved",
     "is_closed",
     "is_acknowledged",
@@ -44,9 +46,16 @@ function rowsToCsv(rows) {
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
-    const markerType = normalizeMarkerType(searchParams.get("markerType"));
+    const filters = {
+      location: searchParams.get("location") || "",
+      requestType: searchParams.get("requestType") || "",
+      acknowledgement: searchParams.get("acknowledgement") || "all",
+      timeWindow: searchParams.get("timeWindow") || "all",
+      urgencyLabels: parseUrgencyLabels(searchParams.get("urgencyLabels")),
+      includeClosed: searchParams.get("includeClosed") === "1",
+    };
 
-    const exportResult = await fetchTweetsForCsvExport(markerType);
+    const exportResult = await fetchTweetsForCsvExport(filters);
     if (!exportResult.success) {
       return NextResponse.json(
         { error: exportResult.message || "CSV export failed" },
@@ -55,7 +64,7 @@ export async function GET(request) {
     }
 
     const csv = rowsToCsv(exportResult.rows || []);
-    const fileName = `alerts-${markerType}-${Date.now()}.csv`;
+    const fileName = `alerts-filtered-${Date.now()}.csv`;
 
     return new NextResponse(csv, {
       status: 200,

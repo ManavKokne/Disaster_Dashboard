@@ -3,13 +3,14 @@
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Download, Filter, RotateCcw } from "lucide-react";
+import { URGENCY_COLORS, URGENCY_LEVELS } from "@/lib/urgency";
 
 export default function MapFilters({
   locations,
   filterLocation,
   setFilterLocation,
-  filterMarkerType,
-  setFilterMarkerType,
+  selectedUrgencyLabels,
+  onToggleUrgencyLabel,
   filterRequestType,
   setFilterRequestType,
   requestTypes,
@@ -19,7 +20,7 @@ export default function MapFilters({
   setFilterTimeWindow,
   onReset,
   onDownloadCsv,
-  downloadingType,
+  downloadingCsv,
 }) {
   return (
     <div className="flex flex-col gap-3 p-4">
@@ -44,17 +45,32 @@ export default function MapFilters({
             </Select>
           </div>
           <div>
-            <label className="text-[10px] text-slate-500 uppercase tracking-wide">Marker Type</label>
-            <Select
-              value={filterMarkerType}
-              onChange={(e) => setFilterMarkerType(e.target.value)}
-              className="h-7 text-xs mt-0.5"
-            >
-              <option value="all">All</option>
-              <option value="urgent">Urgent</option>
-              <option value="non-urgent">Non-Urgent</option>
-              <option value="resolved">Resolved</option>
-            </Select>
+            <label className="text-[10px] text-slate-500 uppercase tracking-wide">
+              Urgency Levels
+            </label>
+            <div className="mt-1 grid grid-cols-1 gap-1.5 rounded-md border border-slate-200 bg-slate-50 p-2">
+              {URGENCY_LEVELS.map((level) => {
+                const checked = selectedUrgencyLabels.includes(level);
+                return (
+                  <label
+                    key={level}
+                    className="flex items-center gap-2 text-xs text-slate-700"
+                  >
+                    <input
+                      type="checkbox"
+                      className="h-3.5 w-3.5 rounded border-slate-300"
+                      checked={checked}
+                      onChange={() => onToggleUrgencyLabel(level)}
+                    />
+                    <span
+                      className="inline-block h-2.5 w-2.5 rounded-full"
+                      style={{ backgroundColor: URGENCY_COLORS[level] }}
+                    />
+                    <span className="capitalize">{level}</span>
+                  </label>
+                );
+              })}
+            </div>
           </div>
           <div>
             <label className="text-[10px] text-slate-500 uppercase tracking-wide">Request Type</label>
@@ -112,46 +128,17 @@ export default function MapFilters({
           <Download className="h-3 w-3" /> CSV Download
         </h4>
         <p className="text-[11px] text-slate-500 mb-2">
-          Download directly from SQL by urgency type.
+          Download the currently filtered dataset as CSV.
         </p>
-        <div className="grid grid-cols-1 gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onDownloadCsv("all")}
-            disabled={downloadingType === "all"}
-            className="justify-start"
-          >
-            {downloadingType === "all" ? "Downloading..." : "Download All"}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onDownloadCsv("urgent")}
-            disabled={downloadingType === "urgent"}
-            className="justify-start"
-          >
-            {downloadingType === "urgent" ? "Downloading..." : "Download Urgent"}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onDownloadCsv("non-urgent")}
-            disabled={downloadingType === "non-urgent"}
-            className="justify-start"
-          >
-            {downloadingType === "non-urgent" ? "Downloading..." : "Download Non-Urgent"}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onDownloadCsv("resolved")}
-            disabled={downloadingType === "resolved"}
-            className="justify-start"
-          >
-            {downloadingType === "resolved" ? "Downloading..." : "Download Resolved"}
-          </Button>
-        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onDownloadCsv}
+          disabled={downloadingCsv}
+          className="w-full justify-start"
+        >
+          {downloadingCsv ? "Downloading..." : "Download Filtered CSV"}
+        </Button>
       </div>
     </div>
   );

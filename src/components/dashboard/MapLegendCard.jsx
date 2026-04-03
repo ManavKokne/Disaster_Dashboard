@@ -1,9 +1,9 @@
 "use client";
 
+import { URGENCY_COLORS, URGENCY_LEVELS } from "@/lib/urgency";
+
 export default function MapLegendCard({
-  urgentCount,
-  nonUrgentCount,
-  resolvedCount,
+  counts = {},
   totalVisible,
   className = "",
 }) {
@@ -13,21 +13,30 @@ export default function MapLegendCard({
         Legend
       </h4>
       <div className="space-y-1.5">
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <div className="w-3 h-3 rounded-full bg-red-500 opacity-40 absolute -inset-0.5 urgent-ping" />
-            <div className="w-3 h-3 rounded-full bg-red-600 border border-white relative z-10" />
+        {URGENCY_LEVELS.map((level) => (
+          <div key={level} className="flex items-center gap-2">
+            {level === "urgent" ? (
+              <div className="relative">
+                <div
+                  className="w-3 h-3 rounded-full opacity-40 absolute -inset-0.5 urgent-ping"
+                  style={{ backgroundColor: URGENCY_COLORS[level] }}
+                />
+                <div
+                  className="w-3 h-3 rounded-full border border-white relative z-10"
+                  style={{ backgroundColor: URGENCY_COLORS[level] }}
+                />
+              </div>
+            ) : (
+              <div
+                className="w-3 h-3 rounded-full border border-white"
+                style={{ backgroundColor: URGENCY_COLORS[level] }}
+              />
+            )}
+            <span className="text-xs text-slate-600 capitalize">
+              {level} ({counts[level] || 0})
+            </span>
           </div>
-          <span className="text-xs text-slate-600">Urgent ({urgentCount})</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-blue-500 border border-white" />
-          <span className="text-xs text-slate-600">Non-Urgent ({nonUrgentCount})</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-green-500 border border-white" />
-          <span className="text-xs text-slate-600">Resolved ({resolvedCount})</span>
-        </div>
+        ))}
       </div>
       <p className="text-[10px] text-slate-400 mt-1.5">Showing {totalVisible} markers on map</p>
     </div>

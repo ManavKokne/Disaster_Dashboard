@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { getUrgencyMeta } from "@/lib/urgency";
 
 const POLL_INTERVAL_MS = 5000;
 const SOUND_SESSION_KEY = "dashboard_sound_notifications_enabled";
@@ -10,7 +11,7 @@ const ALERT_SOUND_SRC =
 function hasPendingUrgentAlerts(rows) {
   return rows.some(
     (item) =>
-      (item.urgency || "").toLowerCase() === "urgent" &&
+      getUrgencyMeta(item).label === "urgent" &&
       !item.is_closed &&
       !item.is_resolved &&
       !item.is_acknowledged
@@ -144,7 +145,7 @@ export default function useDashboardAlerts({ user, onToast } = {}) {
 
         const newUrgent = newRecords.filter(
           (item) =>
-            (item.urgency || "").toLowerCase() === "urgent" &&
+            getUrgencyMeta(item).label === "urgent" &&
             !item.is_resolved &&
             !item.is_closed
         );

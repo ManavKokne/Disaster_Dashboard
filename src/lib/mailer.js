@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { getUrgencyMeta } from "./urgency";
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || "smtp.gmail.com",
@@ -22,6 +23,11 @@ export async function sendAlertEmail(type, tweetData) {
     return { success: false, message: "SMTP not configured" };
   }
 
+  const urgencyMeta = getUrgencyMeta(tweetData);
+  const urgencyLabel = urgencyMeta.label || "non-urgent";
+  const urgencyScore =
+    Number.isFinite(urgencyMeta.score) ? urgencyMeta.score.toFixed(2) : "N/A";
+
   const subjects = {
     urgent: `🚨 URGENT: New disaster post detected - ${tweetData.location}`,
     resolved: `✅ RESOLVED: Urgent post marked resolved - ${tweetData.location}`,
@@ -35,7 +41,8 @@ export async function sendAlertEmail(type, tweetData) {
         <tr><td style="padding:8px; border:1px solid #ddd; font-weight:bold;">Tweet</td><td style="padding:8px; border:1px solid #ddd;">${tweetData.tweet}</td></tr>
         <tr><td style="padding:8px; border:1px solid #ddd; font-weight:bold;">Location</td><td style="padding:8px; border:1px solid #ddd;">${tweetData.location}</td></tr>
         <tr><td style="padding:8px; border:1px solid #ddd; font-weight:bold;">Request Type</td><td style="padding:8px; border:1px solid #ddd;">${tweetData.request_type}</td></tr>
-        <tr><td style="padding:8px; border:1px solid #ddd; font-weight:bold;">Urgency</td><td style="padding:8px; border:1px solid #ddd; color:#dc2626; font-weight:bold;">${tweetData.urgency}</td></tr>
+        <tr><td style="padding:8px; border:1px solid #ddd; font-weight:bold;">Urgency Label</td><td style="padding:8px; border:1px solid #ddd; color:#dc2626; font-weight:bold;">${urgencyLabel}</td></tr>
+        <tr><td style="padding:8px; border:1px solid #ddd; font-weight:bold;">Urgency Score</td><td style="padding:8px; border:1px solid #ddd;">${urgencyScore}</td></tr>
       </table>
       <p>Please review this post on the dashboard immediately.</p>
     `,
