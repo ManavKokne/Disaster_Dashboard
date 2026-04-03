@@ -20,6 +20,7 @@ export default function MapPage() {
   const [toasts, setToasts] = useState([]);
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
   const [downloadingCsv, setDownloadingCsv] = useState(false);
+  const [downloadingAllCsv, setDownloadingAllCsv] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   const [filterLocation, setFilterLocation] = useState("");
@@ -27,6 +28,12 @@ export default function MapPage() {
   const [filterRequestType, setFilterRequestType] = useState("all");
   const [filterAcknowledgement, setFilterAcknowledgement] = useState("all");
   const [filterTimeWindow, setFilterTimeWindow] = useState("all");
+
+  const [draftFilterLocation, setDraftFilterLocation] = useState("");
+  const [draftSelectedUrgencyLabels, setDraftSelectedUrgencyLabels] = useState([]);
+  const [draftFilterRequestType, setDraftFilterRequestType] = useState("all");
+  const [draftFilterAcknowledgement, setDraftFilterAcknowledgement] = useState("all");
+  const [draftFilterTimeWindow, setDraftFilterTimeWindow] = useState("all");
 
   const pushToast = useCallback((message, tone = "info") => {
     const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -59,12 +66,67 @@ export default function MapPage() {
     const normalizedLabel = normalizeUrgencyLabel(label);
     if (!normalizedLabel) return;
 
-    setSelectedUrgencyLabels((previous) =>
+    setDraftSelectedUrgencyLabels((previous) =>
       previous.includes(normalizedLabel)
         ? previous.filter((item) => item !== normalizedLabel)
         : [...previous, normalizedLabel]
     );
   }, []);
+
+  const hasPendingFilterChanges = useMemo(() => {
+    const appliedUrgency = [...selectedUrgencyLabels].sort().join("|");
+    const draftUrgency = [...draftSelectedUrgencyLabels].sort().join("|");
+
+    return (
+      filterLocation !== draftFilterLocation ||
+      filterRequestType !== draftFilterRequestType ||
+      filterAcknowledgement !== draftFilterAcknowledgement ||
+      filterTimeWindow !== draftFilterTimeWindow ||
+      appliedUrgency !== draftUrgency
+    );
+  }, [
+    selectedUrgencyLabels,
+    draftSelectedUrgencyLabels,
+    filterLocation,
+    draftFilterLocation,
+    filterRequestType,
+    draftFilterRequestType,
+    filterAcknowledgement,
+    draftFilterAcknowledgement,
+    filterTimeWindow,
+    draftFilterTimeWindow,
+  ]);
+
+  const applyFilters = useCallback(() => {
+    setFilterLocation(draftFilterLocation);
+    setSelectedUrgencyLabels(draftSelectedUrgencyLabels);
+    setFilterRequestType(draftFilterRequestType);
+    setFilterAcknowledgement(draftFilterAcknowledgement);
+    setFilterTimeWindow(draftFilterTimeWindow);
+    pushToast("Filters applied", "success");
+  }, [
+    draftFilterLocation,
+    draftSelectedUrgencyLabels,
+    draftFilterRequestType,
+    draftFilterAcknowledgement,
+    draftFilterTimeWindow,
+    pushToast,
+  ]);
+
+  const resetFilters = useCallback(() => {
+    setDraftFilterLocation("");
+    setDraftSelectedUrgencyLabels([]);
+    setDraftFilterRequestType("all");
+    setDraftFilterAcknowledgement("all");
+    setDraftFilterTimeWindow("all");
+
+    setFilterLocation("");
+    setSelectedUrgencyLabels([]);
+    setFilterRequestType("all");
+    setFilterAcknowledgement("all");
+    setFilterTimeWindow("all");
+    pushToast("Filters reset", "info");
+  }, [pushToast]);
 
   const matchesAdditionalFilters = useCallback((tweet) => {
     if (filterLocation && (tweet.location || "").toLowerCase() !== filterLocation.toLowerCase()) {
@@ -137,62 +199,75 @@ export default function MapPage() {
     return baseCounts;
   }, [mapTweets]);
 
-  const downloadCsv = useCallback(
-    async () => {
-      try {
-        setDownloadingCsv(true);
+  const triggerCsvDownload = useCallback(async (endpoint, fallbackFileName) => {
+    const response = await fetch(endpoint);
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(payload.error || "Failed to download CSV");
+    }
 
-        const searchParams = new URLSearchParams();
-        if (filterLocation) searchParams.set("location", filterLocation);
-        if (filterRequestType !== "all") searchParams.set("requestType", filterRequestType);
-        if (filterAcknowledgement !== "all") {
-          searchParams.set("acknowledgement", filterAcknowledgement);
-        }
-        if (filterTimeWindow !== "all") searchParams.set("timeWindow", filterTimeWindow);
-        if (selectedUrgencyLabels.length > 0) {
-          searchParams.set("urgencyLabels", selectedUrgencyLabels.join(","));
-        }
+    const blob = await response.blob();
+    const disposition = response.headers.get("Content-Disposition") || "";
+    const fileNameMatch = disposition.match(/filename=\"?([^\"]+)\"?/i);
+    const fileName = fileNameMatch?.[1] || fallbackFileName;
 
-        const endpoint = searchParams.toString()
-          ? `/api/tweets/export?${searchParams.toString()}`
-          : "/api/tweets/export";
+    const objectUrl = window.URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download = fileName;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.URL.revokeObjectURL(objectUrl);
+  }, []);
 
-        const response = await fetch(endpoint);
-        if (!response.ok) {
-          const payload = await response.json().catch(() => ({}));
-          throw new Error(payload.error || "Failed to download CSV");
-        }
+  const downloadCsv = useCallback(async () => {
+    try {
+      setDownloadingCsv(true);
 
-        const blob = await response.blob();
-        const disposition = response.headers.get("Content-Disposition") || "";
-        const fileNameMatch = disposition.match(/filename=\"?([^\"]+)\"?/i);
-        const fileName = fileNameMatch?.[1] || "alerts-filtered.csv";
-
-        const objectUrl = window.URL.createObjectURL(blob);
-        const anchor = document.createElement("a");
-        anchor.href = objectUrl;
-        anchor.download = fileName;
-        document.body.appendChild(anchor);
-        anchor.click();
-        anchor.remove();
-        window.URL.revokeObjectURL(objectUrl);
-
-        pushToast("Filtered CSV downloaded", "success");
-      } catch (error) {
-        pushToast(error.message || "CSV download failed", "error");
-      } finally {
-        setDownloadingCsv(false);
+      const searchParams = new URLSearchParams();
+      if (filterLocation) searchParams.set("location", filterLocation);
+      if (filterRequestType !== "all") searchParams.set("requestType", filterRequestType);
+      if (filterAcknowledgement !== "all") {
+        searchParams.set("acknowledgement", filterAcknowledgement);
       }
-    },
-    [
-      pushToast,
-      filterLocation,
-      filterRequestType,
-      filterAcknowledgement,
-      filterTimeWindow,
-      selectedUrgencyLabels,
-    ]
-  );
+      if (filterTimeWindow !== "all") searchParams.set("timeWindow", filterTimeWindow);
+      if (selectedUrgencyLabels.length > 0) {
+        searchParams.set("urgencyLabels", selectedUrgencyLabels.join(","));
+      }
+
+      const endpoint = searchParams.toString()
+        ? `/api/tweets/export?${searchParams.toString()}`
+        : "/api/tweets/export";
+
+      await triggerCsvDownload(endpoint, "alerts-filtered.csv");
+      pushToast("Filtered CSV downloaded", "success");
+    } catch (error) {
+      pushToast(error.message || "CSV download failed", "error");
+    } finally {
+      setDownloadingCsv(false);
+    }
+  }, [
+    pushToast,
+    filterLocation,
+    filterRequestType,
+    filterAcknowledgement,
+    filterTimeWindow,
+    selectedUrgencyLabels,
+    triggerCsvDownload,
+  ]);
+
+  const downloadAllTweetsCsv = useCallback(async () => {
+    try {
+      setDownloadingAllCsv(true);
+      await triggerCsvDownload("/api/tweets/export?includeClosed=1", "alerts-all.csv");
+      pushToast("Entire tweets CSV downloaded", "success");
+    } catch (error) {
+      pushToast(error.message || "CSV download failed", "error");
+    } finally {
+      setDownloadingAllCsv(false);
+    }
+  }, [pushToast, triggerCsvDownload]);
 
   if (authLoading) {
     return (
@@ -299,26 +374,24 @@ export default function MapPage() {
 
             <MapFilters
               locations={locations}
-              filterLocation={filterLocation}
-              setFilterLocation={setFilterLocation}
-              selectedUrgencyLabels={selectedUrgencyLabels}
+              filterLocation={draftFilterLocation}
+              setFilterLocation={setDraftFilterLocation}
+              selectedUrgencyLabels={draftSelectedUrgencyLabels}
               onToggleUrgencyLabel={toggleUrgencyLabel}
-              filterRequestType={filterRequestType}
-              setFilterRequestType={setFilterRequestType}
+              filterRequestType={draftFilterRequestType}
+              setFilterRequestType={setDraftFilterRequestType}
               requestTypes={requestTypes}
-              filterAcknowledgement={filterAcknowledgement}
-              setFilterAcknowledgement={setFilterAcknowledgement}
-              filterTimeWindow={filterTimeWindow}
-              setFilterTimeWindow={setFilterTimeWindow}
-              onReset={() => {
-                setFilterLocation("");
-                setSelectedUrgencyLabels([]);
-                setFilterRequestType("all");
-                setFilterAcknowledgement("all");
-                setFilterTimeWindow("all");
-              }}
+              filterAcknowledgement={draftFilterAcknowledgement}
+              setFilterAcknowledgement={setDraftFilterAcknowledgement}
+              filterTimeWindow={draftFilterTimeWindow}
+              setFilterTimeWindow={setDraftFilterTimeWindow}
+              onApplyFilters={applyFilters}
+              hasPendingChanges={hasPendingFilterChanges}
+              onReset={resetFilters}
               onDownloadCsv={downloadCsv}
               downloadingCsv={downloadingCsv}
+              onDownloadAllCsv={downloadAllTweetsCsv}
+              downloadingAllCsv={downloadingAllCsv}
             />
           </CardContent>
         </Card>
@@ -330,26 +403,24 @@ export default function MapPage() {
       >
         <MapFilters
           locations={locations}
-          filterLocation={filterLocation}
-          setFilterLocation={setFilterLocation}
-          selectedUrgencyLabels={selectedUrgencyLabels}
+          filterLocation={draftFilterLocation}
+          setFilterLocation={setDraftFilterLocation}
+          selectedUrgencyLabels={draftSelectedUrgencyLabels}
           onToggleUrgencyLabel={toggleUrgencyLabel}
-          filterRequestType={filterRequestType}
-          setFilterRequestType={setFilterRequestType}
+          filterRequestType={draftFilterRequestType}
+          setFilterRequestType={setDraftFilterRequestType}
           requestTypes={requestTypes}
-          filterAcknowledgement={filterAcknowledgement}
-          setFilterAcknowledgement={setFilterAcknowledgement}
-          filterTimeWindow={filterTimeWindow}
-          setFilterTimeWindow={setFilterTimeWindow}
-          onReset={() => {
-            setFilterLocation("");
-            setSelectedUrgencyLabels([]);
-            setFilterRequestType("all");
-            setFilterAcknowledgement("all");
-            setFilterTimeWindow("all");
-          }}
+          filterAcknowledgement={draftFilterAcknowledgement}
+          setFilterAcknowledgement={setDraftFilterAcknowledgement}
+          filterTimeWindow={draftFilterTimeWindow}
+          setFilterTimeWindow={setDraftFilterTimeWindow}
+          onApplyFilters={applyFilters}
+          hasPendingChanges={hasPendingFilterChanges}
+          onReset={resetFilters}
           onDownloadCsv={downloadCsv}
           downloadingCsv={downloadingCsv}
+          onDownloadAllCsv={downloadAllTweetsCsv}
+          downloadingAllCsv={downloadingAllCsv}
         />
       </MapFilterDrawer>
     </div>

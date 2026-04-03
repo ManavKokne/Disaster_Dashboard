@@ -18,9 +18,13 @@ export default function MapFilters({
   setFilterAcknowledgement,
   filterTimeWindow,
   setFilterTimeWindow,
+  onApplyFilters,
+  hasPendingChanges,
   onReset,
   onDownloadCsv,
   downloadingCsv,
+  onDownloadAllCsv,
+  downloadingAllCsv,
 }) {
   return (
     <div className="flex flex-col gap-3 p-4">
@@ -113,6 +117,14 @@ export default function MapFilters({
             </Select>
           </div>
           <Button
+            size="sm"
+            onClick={onApplyFilters}
+            disabled={!hasPendingChanges}
+            className="w-full h-7 text-xs"
+          >
+            Apply Filters
+          </Button>
+          <Button
             variant="ghost"
             size="sm"
             onClick={onReset}
@@ -134,10 +146,19 @@ export default function MapFilters({
           variant="outline"
           size="sm"
           onClick={onDownloadCsv}
-          disabled={downloadingCsv}
+          disabled={downloadingCsv || downloadingAllCsv}
           className="w-full justify-start"
         >
           {downloadingCsv ? "Downloading..." : "Download Filtered CSV"}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onDownloadAllCsv}
+          disabled={downloadingCsv || downloadingAllCsv}
+          className="w-full justify-start mt-2"
+        >
+          {downloadingAllCsv ? "Downloading..." : "Download Entire Tweets CSV"}
         </Button>
       </div>
     </div>

@@ -38,6 +38,15 @@ function displayOrNA(value) {
   return value;
 }
 
+function getCoordinatesKey(tweet) {
+  const lat = Number(tweet?.coordinates?.lat);
+  const lng = Number(tweet?.coordinates?.lng);
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+  return `${lat.toFixed(6)}:${lng.toFixed(6)}`;
+}
+
 function getUrgencyLabelClasses(label) {
   if (label === "urgent") return "border-red-200 bg-red-50 text-red-700";
   if (label === "semi-urgent") return "border-orange-200 bg-orange-50 text-orange-700";
@@ -105,6 +114,67 @@ export default function MapContainer({
     () => (selectedTweet ? getUrgencyMeta(selectedTweet) : null),
     [selectedTweet]
   );
+
+  const tweetsByCoordinates = useMemo(() => {
+    const grouped = new Map();
+
+    filteredTweets.forEach((tweet) => {
+      const key = getCoordinatesKey(tweet);
+      if (!key) return;
+
+      const existing = grouped.get(key) || [];
+      existing.push(tweet);
+      grouped.set(key, existing);
+    });
+
+    grouped.forEach((bucket) => {
+      bucket.sort((a, b) => {
+        const aTime = new Date(a.created_at || a.updated_at || 0).getTime();
+        const bTime = new Date(b.created_at || b.updated_at || 0).getTime();
+
+        if (!Number.isNaN(aTime) && !Number.isNaN(bTime) && aTime !== bTime) {
+          return bTime - aTime;
+        }
+
+        return Number(b.id || 0) - Number(a.id || 0);
+      });
+    });
+
+    return grouped;
+  }, [filteredTweets]);
+
+  const selectedCoordinatesKey = useMemo(
+    () => (selectedTweet ? getCoordinatesKey(selectedTweet) : null),
+    [selectedTweet]
+  );
+
+  const overlappingTweets = useMemo(() => {
+    if (!selectedCoordinatesKey) return [];
+    return tweetsByCoordinates.get(selectedCoordinatesKey) || [];
+  }, [selectedCoordinatesKey, tweetsByCoordinates]);
+
+  const selectedOverlapIndex = useMemo(() => {
+    if (!selectedTweet) return -1;
+    return overlappingTweets.findIndex((tweet) => tweet.id === selectedTweet.id);
+  }, [overlappingTweets, selectedTweet]);
+
+  const hasOverlappingNavigation =
+    overlappingTweets.length > 1 && selectedOverlapIndex >= 0;
+
+  const showPreviousOverlapTweet = useCallback(() => {
+    if (!hasOverlappingNavigation) return;
+
+    const previousIndex =
+      (selectedOverlapIndex - 1 + overlappingTweets.length) % overlappingTweets.length;
+    setSelectedTweetId(overlappingTweets[previousIndex].id);
+  }, [hasOverlappingNavigation, selectedOverlapIndex, overlappingTweets]);
+
+  const showNextOverlapTweet = useCallback(() => {
+    if (!hasOverlappingNavigation) return;
+
+    const nextIndex = (selectedOverlapIndex + 1) % overlappingTweets.length;
+    setSelectedTweetId(overlappingTweets[nextIndex].id);
+  }, [hasOverlappingNavigation, selectedOverlapIndex, overlappingTweets]);
 
   const handleResolve = (tweet) => {
     const confirmed = window.confirm("Are you sure you want to mark this alert as Resolved?");
@@ -179,8 +249,36 @@ export default function MapContainer({
           <div style={{ minWidth: 260, maxWidth: 320, overflow: "visible" }}>
             <div className="rounded-lg border border-slate-200 bg-white">
               <div className="px-3 py-2 border-b border-slate-200 bg-slate-50 rounded-t-lg">
-                <h4 className="text-sm font-semibold text-slate-800">Incident Alert</h4>
-                <p className="text-[11px] text-slate-500">Operator Action Panel</p>
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <h4 className="text-sm font-semibold text-slate-800">Incident Alert</h4>
+                    <p className="text-[11px] text-slate-500">Operator Action Panel</p>
+                  </div>
+
+                  {hasOverlappingNavigation && (
+                    <div className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-1 py-0.5">
+                      <button
+                        type="button"
+                        onClick={showPreviousOverlapTweet}
+                        className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-600 hover:bg-slate-100"
+                        aria-label="Show previous overlapping marker"
+                      >
+                        <span className="text-xs">&larr;</span>
+                      </button>
+                      <span className="text-[10px] text-slate-600 min-w-8 text-center">
+                        {selectedOverlapIndex + 1}/{overlappingTweets.length}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={showNextOverlapTweet}
+                        className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-600 hover:bg-slate-100"
+                        aria-label="Show next overlapping marker"
+                      >
+                        <span className="text-xs">&rarr;</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="px-3 py-2.5 space-y-2">
@@ -194,8 +292,8 @@ export default function MapContainer({
                 </div>
 
                 <div className="grid grid-cols-[70px_1fr] gap-y-1 text-xs">
-                  <span className="font-semibold text-slate-600">ID</span>
-                  <span className="text-slate-700">{displayOrNA(selectedTweet.id)}</span>
+                  {/* <span className="font-semibold text-slate-600">ID</span>
+                  <span className="text-slate-700">{displayOrNA(selectedTweet.id)}</span> */}
 
                   <span className="font-semibold text-slate-600">Location</span>
                   <span className="text-slate-700">{displayOrNA(selectedTweet.location)}</span>
@@ -214,24 +312,24 @@ export default function MapContainer({
                     </span>
                   </span>
 
-                  <span className="font-semibold text-slate-600">Score</span>
+                  {/* <span className="font-semibold text-slate-600">Score</span>
                   <span className="text-slate-700">
                     {Number.isFinite(selectedUrgencyMeta?.score)
                       ? selectedUrgencyMeta.score.toFixed(2)
                       : "N/A"}
-                  </span>
+                  </span> */}
 
                   <span className="font-semibold text-slate-600">Created</span>
                   <span className="text-slate-700">{formatDateTime(selectedTweet.created_at)}</span>
 
-                  <span className="font-semibold text-slate-600">Updated</span>
-                  <span className="text-slate-700">{formatDateTime(selectedTweet.updated_at)}</span>
+                  {/* <span className="font-semibold text-slate-600">Updated</span>
+                  <span className="text-slate-700">{formatDateTime(selectedTweet.updated_at)}</span> */}
 
-                  <span className="font-semibold text-slate-600">Resolved</span>
+                  {/* <span className="font-semibold text-slate-600">Resolved</span>
                   <span className="text-slate-700">{formatDateTime(selectedTweet.resolved_at)}</span>
 
                   <span className="font-semibold text-slate-600">Closed</span>
-                  <span className="text-slate-700">{formatDateTime(selectedTweet.closed_at)}</span>
+                  <span className="text-slate-700">{formatDateTime(selectedTweet.closed_at)}</span> */}
                 </div>
               </div>
 
