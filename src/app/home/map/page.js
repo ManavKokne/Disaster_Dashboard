@@ -11,6 +11,7 @@ import MapLegendCard from "@/components/dashboard/MapLegendCard";
 import { Card, CardContent } from "@/components/ui/card";
 import { Filter, Loader2 } from "lucide-react";
 import useDashboardAlerts from "@/hooks/useDashboardAlerts";
+import { getUrgencyMeta, normalizeUrgencyLabel, URGENCY_LEVELS } from "@/lib/urgency";
 
 export default function MapPage() {
   const { user, loading: authLoading } = useAuth();
@@ -18,11 +19,11 @@ export default function MapPage() {
 
   const [toasts, setToasts] = useState([]);
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
-  const [downloadingCsvType, setDownloadingCsvType] = useState("");
+  const [downloadingCsv, setDownloadingCsv] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   const [filterLocation, setFilterLocation] = useState("");
-  const [filterMarkerType, setFilterMarkerType] = useState("all");
+  const [selectedUrgencyLabels, setSelectedUrgencyLabels] = useState([]);
   const [filterRequestType, setFilterRequestType] = useState("all");
   const [filterAcknowledgement, setFilterAcknowledgement] = useState("all");
   const [filterTimeWindow, setFilterTimeWindow] = useState("all");
@@ -54,24 +55,37 @@ export default function MapPage() {
     return diffMs <= (windowsInMs[filterTimeWindow] || Number.MAX_SAFE_INTEGER);
   }, [filterTimeWindow, nowMs]);
 
+  const toggleUrgencyLabel = useCallback((label) => {
+    const normalizedLabel = normalizeUrgencyLabel(label);
+    if (!normalizedLabel) return;
+
+    setSelectedUrgencyLabels((previous) =>
+      previous.includes(normalizedLabel)
+        ? previous.filter((item) => item !== normalizedLabel)
+        : [...previous, normalizedLabel]
+    );
+  }, []);
+
   const matchesAdditionalFilters = useCallback((tweet) => {
-    if (filterLocation && tweet.location.toLowerCase() !== filterLocation.toLowerCase()) return false;
+    if (filterLocation && (tweet.location || "").toLowerCase() !== filterLocation.toLowerCase()) {
+      return false;
+    }
     if (filterRequestType !== "all" && (tweet.request_type || "") !== filterRequestType) return false;
     if (filterAcknowledgement === "acknowledged" && !tweet.is_acknowledged) return false;
     if (filterAcknowledgement === "unacknowledged" && tweet.is_acknowledged) return false;
+    if (selectedUrgencyLabels.length > 0) {
+      const { label } = getUrgencyMeta(tweet);
+      if (!selectedUrgencyLabels.includes(label)) return false;
+    }
     if (!isWithinTimeWindow(tweet)) return false;
     return true;
-  }, [filterLocation, filterRequestType, filterAcknowledgement, isWithinTimeWindow]);
-
-  const isTweetMatchingMarkerType = useCallback((tweet, markerType) => {
-    const urgencyLower = (tweet.urgency || "").toLowerCase();
-    const isResolved = Boolean(tweet.is_resolved) || urgencyLower === "resolved";
-
-    if (markerType === "urgent") return urgencyLower === "urgent" && !isResolved;
-    if (markerType === "non-urgent") return urgencyLower !== "urgent" && !isResolved;
-    if (markerType === "resolved") return isResolved;
-    return true;
-  }, []);
+  }, [
+    filterLocation,
+    filterRequestType,
+    filterAcknowledgement,
+    selectedUrgencyLabels,
+    isWithinTimeWindow,
+  ]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -105,40 +119,45 @@ export default function MapPage() {
     return activeTweets.filter((t) => {
       if (!t.coordinates) return false;
       if (!matchesAdditionalFilters(t)) return false;
-      if (!isTweetMatchingMarkerType(t, filterMarkerType)) return false;
-      return true;
-    });
-  }, [activeTweets, matchesAdditionalFilters, filterMarkerType, isTweetMatchingMarkerType]);
-
-  const locationScopedTweets = useMemo(() => {
-    return activeTweets.filter((t) => {
-      if (!t.coordinates) return false;
-      if (!matchesAdditionalFilters(t)) return false;
       return true;
     });
   }, [activeTweets, matchesAdditionalFilters]);
 
-  const urgentCount = useMemo(
-    () => locationScopedTweets.filter((t) => isTweetMatchingMarkerType(t, "urgent")).length,
-    [locationScopedTweets, isTweetMatchingMarkerType]
-  );
-  const nonUrgentCount = useMemo(
-    () => locationScopedTweets.filter((t) => isTweetMatchingMarkerType(t, "non-urgent")).length,
-    [locationScopedTweets, isTweetMatchingMarkerType]
-  );
-  const resolvedCount = useMemo(
-    () => locationScopedTweets.filter((t) => isTweetMatchingMarkerType(t, "resolved")).length,
-    [locationScopedTweets, isTweetMatchingMarkerType]
-  );
+  const urgencyCounts = useMemo(() => {
+    const baseCounts = URGENCY_LEVELS.reduce((accumulator, level) => {
+      accumulator[level] = 0;
+      return accumulator;
+    }, {});
+
+    mapTweets.forEach((tweet) => {
+      const { label } = getUrgencyMeta(tweet);
+      baseCounts[label] = (baseCounts[label] || 0) + 1;
+    });
+
+    return baseCounts;
+  }, [mapTweets]);
 
   const downloadCsv = useCallback(
-    async (markerType) => {
+    async () => {
       try {
-        setDownloadingCsvType(markerType);
+        setDownloadingCsv(true);
 
-        const response = await fetch(
-          `/api/tweets/export?markerType=${encodeURIComponent(markerType)}`
-        );
+        const searchParams = new URLSearchParams();
+        if (filterLocation) searchParams.set("location", filterLocation);
+        if (filterRequestType !== "all") searchParams.set("requestType", filterRequestType);
+        if (filterAcknowledgement !== "all") {
+          searchParams.set("acknowledgement", filterAcknowledgement);
+        }
+        if (filterTimeWindow !== "all") searchParams.set("timeWindow", filterTimeWindow);
+        if (selectedUrgencyLabels.length > 0) {
+          searchParams.set("urgencyLabels", selectedUrgencyLabels.join(","));
+        }
+
+        const endpoint = searchParams.toString()
+          ? `/api/tweets/export?${searchParams.toString()}`
+          : "/api/tweets/export";
+
+        const response = await fetch(endpoint);
         if (!response.ok) {
           const payload = await response.json().catch(() => ({}));
           throw new Error(payload.error || "Failed to download CSV");
@@ -147,7 +166,7 @@ export default function MapPage() {
         const blob = await response.blob();
         const disposition = response.headers.get("Content-Disposition") || "";
         const fileNameMatch = disposition.match(/filename=\"?([^\"]+)\"?/i);
-        const fileName = fileNameMatch?.[1] || `alerts-${markerType}.csv`;
+        const fileName = fileNameMatch?.[1] || "alerts-filtered.csv";
 
         const objectUrl = window.URL.createObjectURL(blob);
         const anchor = document.createElement("a");
@@ -158,14 +177,21 @@ export default function MapPage() {
         anchor.remove();
         window.URL.revokeObjectURL(objectUrl);
 
-        pushToast(`CSV downloaded for ${markerType}`, "success");
+        pushToast("Filtered CSV downloaded", "success");
       } catch (error) {
         pushToast(error.message || "CSV download failed", "error");
       } finally {
-        setDownloadingCsvType("");
+        setDownloadingCsv(false);
       }
     },
-    [pushToast]
+    [
+      pushToast,
+      filterLocation,
+      filterRequestType,
+      filterAcknowledgement,
+      filterTimeWindow,
+      selectedUrgencyLabels,
+    ]
   );
 
   if (authLoading) {
@@ -235,16 +261,10 @@ export default function MapPage() {
                 </div>
               ) : (
                 <MapContainer
-                  tweets={activeTweets}
+                  tweets={mapTweets}
                   onResolve={handleResolve}
                   onClose={handleClose}
                   onAcknowledge={handleAcknowledge}
-                  filterLocation={filterLocation}
-                  filterMarkerType={filterMarkerType}
-                  filterRequestType={filterRequestType}
-                  filterAcknowledgement={filterAcknowledgement}
-                  filterTimeWindow={filterTimeWindow}
-                  nowMs={nowMs}
                 />
               )}
 
@@ -260,9 +280,7 @@ export default function MapPage() {
                   </button>
 
                   <MapLegendCard
-                    urgentCount={urgentCount}
-                    nonUrgentCount={nonUrgentCount}
-                    resolvedCount={resolvedCount}
+                    counts={urgencyCounts}
                     totalVisible={mapTweets.length}
                     className="absolute top-3 right-3 z-30 lg:hidden"
                   />
@@ -275,9 +293,7 @@ export default function MapPage() {
         <Card className="w-72 xl:w-80 shrink-0 overflow-y-auto hidden lg:block">
           <CardContent className="p-3 space-y-3">
             <MapLegendCard
-              urgentCount={urgentCount}
-              nonUrgentCount={nonUrgentCount}
-              resolvedCount={resolvedCount}
+              counts={urgencyCounts}
               totalVisible={mapTweets.length}
             />
 
@@ -285,8 +301,8 @@ export default function MapPage() {
               locations={locations}
               filterLocation={filterLocation}
               setFilterLocation={setFilterLocation}
-              filterMarkerType={filterMarkerType}
-              setFilterMarkerType={setFilterMarkerType}
+              selectedUrgencyLabels={selectedUrgencyLabels}
+              onToggleUrgencyLabel={toggleUrgencyLabel}
               filterRequestType={filterRequestType}
               setFilterRequestType={setFilterRequestType}
               requestTypes={requestTypes}
@@ -294,17 +310,15 @@ export default function MapPage() {
               setFilterAcknowledgement={setFilterAcknowledgement}
               filterTimeWindow={filterTimeWindow}
               setFilterTimeWindow={setFilterTimeWindow}
-              visibleCount={mapTweets.length}
-              totalWithCoordinates={activeTweets.filter((t) => t.coordinates).length}
               onReset={() => {
                 setFilterLocation("");
-                setFilterMarkerType("all");
+                setSelectedUrgencyLabels([]);
                 setFilterRequestType("all");
                 setFilterAcknowledgement("all");
                 setFilterTimeWindow("all");
               }}
               onDownloadCsv={downloadCsv}
-              downloadingType={downloadingCsvType}
+              downloadingCsv={downloadingCsv}
             />
           </CardContent>
         </Card>
@@ -318,8 +332,8 @@ export default function MapPage() {
           locations={locations}
           filterLocation={filterLocation}
           setFilterLocation={setFilterLocation}
-          filterMarkerType={filterMarkerType}
-          setFilterMarkerType={setFilterMarkerType}
+          selectedUrgencyLabels={selectedUrgencyLabels}
+          onToggleUrgencyLabel={toggleUrgencyLabel}
           filterRequestType={filterRequestType}
           setFilterRequestType={setFilterRequestType}
           requestTypes={requestTypes}
@@ -327,17 +341,15 @@ export default function MapPage() {
           setFilterAcknowledgement={setFilterAcknowledgement}
           filterTimeWindow={filterTimeWindow}
           setFilterTimeWindow={setFilterTimeWindow}
-          visibleCount={mapTweets.length}
-          totalWithCoordinates={activeTweets.filter((t) => t.coordinates).length}
           onReset={() => {
             setFilterLocation("");
-            setFilterMarkerType("all");
+            setSelectedUrgencyLabels([]);
             setFilterRequestType("all");
             setFilterAcknowledgement("all");
             setFilterTimeWindow("all");
           }}
           onDownloadCsv={downloadCsv}
-          downloadingType={downloadingCsvType}
+          downloadingCsv={downloadingCsv}
         />
       </MapFilterDrawer>
     </div>

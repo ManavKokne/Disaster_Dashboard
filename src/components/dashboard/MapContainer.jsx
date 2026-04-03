@@ -8,6 +8,7 @@ import {
   OverlayView,
   InfoWindowF,
 } from "@react-google-maps/api";
+import { getUrgencyMeta } from "@/lib/urgency";
 
 const MAP_CENTER = { lat: 20.5937, lng: 78.9629 };
 const MAP_ZOOM = 5;
@@ -25,41 +26,46 @@ const mapOptions = {
   fullscreenControl: false,
 };
 
-function UrgentMarker({ onClick }) {
+function formatDateTime(value) {
+  if (!value) return "N/A";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "N/A";
+  return parsed.toLocaleString();
+}
+
+function displayOrNA(value) {
+  if (value == null || value === "") return "N/A";
+  return value;
+}
+
+function getUrgencyLabelClasses(label) {
+  if (label === "urgent") return "border-red-200 bg-red-50 text-red-700";
+  if (label === "semi-urgent") return "border-orange-200 bg-orange-50 text-orange-700";
+  if (label === "potentially urgent") return "border-yellow-200 bg-yellow-50 text-yellow-700";
+  return "border-blue-200 bg-blue-50 text-blue-700";
+}
+
+function SeverityMarker({ onClick, color, isBlinking, isResolved }) {
   return (
     <div
       className="cursor-pointer"
-      style={{ transform: "translate(-12px, -12px)" }}
+      style={{ transform: "translate(-10px, -10px)" }}
       onClick={(e) => { e.stopPropagation(); onClick(); }}
     >
-      <div className="relative w-6 h-6 flex items-center justify-center">
-        <div className="absolute inset-0 rounded-full bg-red-500 opacity-40 urgent-ping" />
-        <div className="relative w-4 h-4 rounded-full bg-red-600 border-2 border-white shadow-lg z-10" />
+      <div className="relative w-5 h-5 flex items-center justify-center">
+        {isBlinking && (
+          <div
+            className="absolute inset-0 rounded-full opacity-40 urgent-ping"
+            style={{ backgroundColor: color }}
+          />
+        )}
+        <div
+          className={`relative w-3.5 h-3.5 rounded-full border-2 border-white shadow-lg z-10 ${
+            isResolved ? "opacity-70" : "opacity-100"
+          }`}
+          style={{ backgroundColor: color }}
+        />
       </div>
-    </div>
-  );
-}
-
-function NonUrgentMarker({ onClick }) {
-  return (
-    <div
-      className="cursor-pointer"
-      style={{ transform: "translate(-7px, -7px)", willChange: "auto" }}
-      onClick={(e) => { e.stopPropagation(); onClick(); }}
-    >
-      <div className="w-3.5 h-3.5 rounded-full border-2 border-white" style={{ background: "#3b82f6", boxShadow: "0 0 3px rgba(0,0,0,0.3)" }} />
-    </div>
-  );
-}
-
-function ResolvedMarker({ onClick }) {
-  return (
-    <div
-      className="cursor-pointer"
-      style={{ transform: "translate(-7px, -7px)", willChange: "auto" }}
-      onClick={(e) => { e.stopPropagation(); onClick(); }}
-    >
-      <div className="w-3.5 h-3.5 rounded-full border-2 border-white" style={{ background: "#22c55e", boxShadow: "0 0 3px rgba(0,0,0,0.3)" }} />
     </div>
   );
 }
@@ -69,12 +75,6 @@ export default function MapContainer({
   onResolve,
   onClose,
   onAcknowledge,
-  filterLocation,
-  filterMarkerType,
-  filterRequestType,
-  filterAcknowledgement,
-  filterTimeWindow,
-  nowMs,
 }) {
   const { isLoaded } = useJsApiLoader({
     id: "google-map-script",
@@ -92,52 +92,18 @@ export default function MapContainer({
     mapRef.current = null;
   }, []);
 
-  // Filter tweets for map display
-  const filteredTweets = useMemo(() => {
-    return tweets.filter((t) => {
-      const urgencyLower = (t.urgency || "").toLowerCase();
-      const isResolved = Boolean(t.is_resolved) || urgencyLower === "resolved";
-      if (!t.coordinates) return false;
-      if (filterLocation && t.location.toLowerCase() !== filterLocation.toLowerCase()) return false;
-      if (filterRequestType && filterRequestType !== "all" && (t.request_type || "") !== filterRequestType) return false;
-      if (filterAcknowledgement === "acknowledged" && !t.is_acknowledged) return false;
-      if (filterAcknowledgement === "unacknowledged" && t.is_acknowledged) return false;
+  const filteredTweets = useMemo(
+    () => tweets.filter((tweet) => Boolean(tweet.coordinates)),
+    [tweets]
+  );
 
-      if (filterTimeWindow && filterTimeWindow !== "all") {
-        const createdAt = t.created_at || t.updated_at;
-        if (!createdAt) return false;
-        const parsed = new Date(createdAt);
-        if (Number.isNaN(parsed.getTime())) return false;
-
-        const diffMs = nowMs - parsed.getTime();
-        const windowsInMs = {
-          "24h": 24 * 60 * 60 * 1000,
-          "72h": 72 * 60 * 60 * 1000,
-          "7d": 7 * 24 * 60 * 60 * 1000,
-        };
-
-        if (diffMs > (windowsInMs[filterTimeWindow] || Number.MAX_SAFE_INTEGER)) return false;
-      }
-
-      if (filterMarkerType === "urgent" && (urgencyLower !== "urgent" || isResolved)) return false;
-      if (filterMarkerType === "non-urgent" && (urgencyLower === "urgent" || isResolved)) return false;
-      if (filterMarkerType === "resolved" && !isResolved) return false;
-      return true;
-    });
-  }, [
-    tweets,
-    filterLocation,
-    filterMarkerType,
-    filterRequestType,
-    filterAcknowledgement,
-    filterTimeWindow,
-    nowMs,
-  ]);
-
-  // Derive selectedTweet from the live tweets array so it stays in sync after resolve
   const selectedTweet = useMemo(
-    () => (selectedTweetId ? filteredTweets.find((t) => t.id === selectedTweetId) : null),
+    () => (selectedTweetId ? filteredTweets.find((tweet) => tweet.id === selectedTweetId) : null),
     [selectedTweetId, filteredTweets]
+  );
+  const selectedUrgencyMeta = useMemo(
+    () => (selectedTweet ? getUrgencyMeta(selectedTweet) : null),
+    [selectedTweet]
   );
 
   const handleResolve = (tweet) => {
@@ -155,7 +121,6 @@ export default function MapContainer({
   };
 
   const hideInfoWindowCloseButton = useCallback(() => {
-    // Google injects the close control dynamically, so hide it after mount.
     requestAnimationFrame(() => {
       const closeButtons = document.querySelectorAll(".gm-style-iw button.gm-ui-hover-effect");
       closeButtons.forEach((button) => {
@@ -185,22 +150,21 @@ export default function MapContainer({
       onClick={() => setSelectedTweetId(null)}
     >
       {filteredTweets.map((tweet) => {
-        const urgencyLower = (tweet.urgency || "").toLowerCase();
-        const isUrgent = urgencyLower === "urgent";
-        const isResolved = Boolean(tweet.is_resolved) || urgencyLower === "resolved";
+        const urgencyMeta = getUrgencyMeta(tweet);
+        const isResolved = Boolean(tweet.is_resolved);
+
         return (
           <OverlayViewF
             key={tweet.id}
             position={tweet.coordinates}
             mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
           >
-            {isResolved ? (
-              <ResolvedMarker onClick={() => setSelectedTweetId(tweet.id)} />
-            ) : isUrgent ? (
-              <UrgentMarker onClick={() => setSelectedTweetId(tweet.id)} />
-            ) : (
-              <NonUrgentMarker onClick={() => setSelectedTweetId(tweet.id)} />
-            )}
+            <SeverityMarker
+              onClick={() => setSelectedTweetId(tweet.id)}
+              color={urgencyMeta.color}
+              isBlinking={urgencyMeta.isBlinking && !isResolved && !tweet.is_closed}
+              isResolved={isResolved}
+            />
           </OverlayViewF>
         );
       })}
@@ -220,29 +184,54 @@ export default function MapContainer({
               </div>
 
               <div className="px-3 py-2.5 space-y-2">
-                <p className="text-sm text-slate-800 font-medium leading-snug">
-                  {selectedTweet.tweet || selectedTweet.content}
-                </p>
+                <div className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5">
+                  <p className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide mb-1">
+                    Full Content
+                  </p>
+                  <p className="text-sm text-slate-800 font-medium leading-snug whitespace-pre-wrap break-words">
+                    {displayOrNA(selectedTweet.content || selectedTweet.tweet)}
+                  </p>
+                </div>
 
                 <div className="grid grid-cols-[70px_1fr] gap-y-1 text-xs">
+                  <span className="font-semibold text-slate-600">ID</span>
+                  <span className="text-slate-700">{displayOrNA(selectedTweet.id)}</span>
+
                   <span className="font-semibold text-slate-600">Location</span>
-                  <span className="text-slate-700">{selectedTweet.location}</span>
+                  <span className="text-slate-700">{displayOrNA(selectedTweet.location)}</span>
 
                   <span className="font-semibold text-slate-600">Category</span>
-                  <span className="text-slate-700">{selectedTweet.request_type || "N/A"}</span>
+                  <span className="text-slate-700">{displayOrNA(selectedTweet.request_type)}</span>
 
                   <span className="font-semibold text-slate-600">Urgency</span>
-                  <span
-                    className={
-                      (selectedTweet.urgency || "").toLowerCase() === "urgent" && !selectedTweet.is_resolved
-                        ? "text-red-600 font-semibold"
-                        : selectedTweet.is_resolved
-                        ? "text-green-600 font-semibold"
-                        : "text-blue-600 font-semibold"
-                    }
-                  >
-                    {selectedTweet.is_resolved ? "resolved" : selectedTweet.urgency}
+                  <span className="text-slate-700">
+                    <span
+                      className={`inline-flex items-center rounded-full border px-2 py-0.5 font-semibold ${getUrgencyLabelClasses(
+                        selectedUrgencyMeta?.label
+                      )}`}
+                    >
+                      {displayOrNA(selectedUrgencyMeta?.label)}
+                    </span>
                   </span>
+
+                  <span className="font-semibold text-slate-600">Score</span>
+                  <span className="text-slate-700">
+                    {Number.isFinite(selectedUrgencyMeta?.score)
+                      ? selectedUrgencyMeta.score.toFixed(2)
+                      : "N/A"}
+                  </span>
+
+                  <span className="font-semibold text-slate-600">Created</span>
+                  <span className="text-slate-700">{formatDateTime(selectedTweet.created_at)}</span>
+
+                  <span className="font-semibold text-slate-600">Updated</span>
+                  <span className="text-slate-700">{formatDateTime(selectedTweet.updated_at)}</span>
+
+                  <span className="font-semibold text-slate-600">Resolved</span>
+                  <span className="text-slate-700">{formatDateTime(selectedTweet.resolved_at)}</span>
+
+                  <span className="font-semibold text-slate-600">Closed</span>
+                  <span className="text-slate-700">{formatDateTime(selectedTweet.closed_at)}</span>
                 </div>
               </div>
 
@@ -256,7 +245,7 @@ export default function MapContainer({
                   </button>
                 )}
 
-                {(selectedTweet.urgency || "").toLowerCase() === "urgent" && !selectedTweet.is_resolved && !selectedTweet.is_acknowledged && (
+                {selectedUrgencyMeta?.label === "urgent" && !selectedTweet.is_resolved && !selectedTweet.is_acknowledged && (
                   <button
                     onClick={() => onAcknowledge?.(selectedTweet.id)}
                     className="px-3 py-1.5 bg-amber-600 text-white text-xs rounded-md hover:bg-amber-700 transition-colors cursor-pointer"

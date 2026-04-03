@@ -1,4 +1,5 @@
 import twilio from "twilio";
+import { getUrgencyMeta } from "./urgency";
 
 function escapeXml(value) {
   return String(value)
@@ -33,6 +34,8 @@ function isSmsEnabled() {
 }
 
 export async function sendTwilioAlert(type, tweetData) {
+  const urgencyMeta = getUrgencyMeta(tweetData);
+
   if (type !== "urgent") {
     return { success: true, skipped: true, message: "Twilio only sends urgent alerts" };
   }
@@ -63,8 +66,10 @@ export async function sendTwilioAlert(type, tweetData) {
     return { success: false, message: "No Twilio recipients configured" };
   }
 
-  const alertText = `URGENT disaster alert at ${tweetData.location}. \nType: ${tweetData.request_type}. \n${tweetData.tweet}`;
-  const voiceMessage = process.env.TWILIO_VOICE_MESSAGE || `Urgent disaster alert detected at ${tweetData.location}. Please check the dashboard immediately.`;
+  const alertText = `URGENT disaster alert at ${tweetData.location}. \nType: ${tweetData.request_type}. \nUrgency: ${urgencyMeta.label} (score ${urgencyMeta.score.toFixed(2)}). \n${tweetData.tweet}`;
+  const voiceMessage =
+    process.env.TWILIO_VOICE_MESSAGE ||
+    `Urgent disaster alert detected at ${tweetData.location}. Urgency level is ${urgencyMeta.label}. Please check the dashboard immediately.`;
   const escapedVoiceMessage = escapeXml(voiceMessage);
   const voiceLanguage = process.env.TWILIO_VOICE_LANGUAGE || "en-US";
   const voiceName = process.env.TWILIO_VOICE_NAME || "alice";

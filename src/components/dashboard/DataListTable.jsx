@@ -29,6 +29,7 @@ import {
   ChevronsRight,
   ArrowUpDown,
 } from "lucide-react";
+import { getUrgencyMeta } from "@/lib/urgency";
 
 export default function DataListTable({ tweets, locations, requestTypes }) {
   const [globalFilter, setGlobalFilter] = useState("");
@@ -94,7 +95,7 @@ export default function DataListTable({ tweets, locations, requestTypes }) {
         ),
       },
       {
-        accessorKey: "urgency",
+        accessorKey: "urgency_label",
         header: ({ column }) => (
           <button
             className="flex items-center gap-1 cursor-pointer hover:text-slate-900"
@@ -105,24 +106,46 @@ export default function DataListTable({ tweets, locations, requestTypes }) {
         ),
         size: 120,
         cell: ({ row }) => {
-          const urgency = (row.original.urgency || "").toLowerCase();
+          const urgencyMeta = getUrgencyMeta(row.original);
+          const urgencyLabel = urgencyMeta.label;
           const isClosed = Boolean(row.original.is_closed);
           const isResolved = Boolean(row.original.is_resolved);
+
+          let className = "";
+          if (urgencyLabel === "urgent") {
+            className = "bg-red-100 text-red-700";
+          } else if (urgencyLabel === "semi-urgent") {
+            className = "bg-orange-100 text-orange-700";
+          } else if (urgencyLabel === "potentially urgent") {
+            className = "bg-yellow-100 text-yellow-700";
+          } else {
+            className = "bg-blue-100 text-blue-700";
+          }
+
+          if (isClosed) {
+            className = "bg-slate-100 text-slate-700";
+          }
+
+          if (isResolved && !isClosed) {
+            className = "bg-green-100 text-green-700";
+          }
+
           return (
             <Badge
-              variant={
-                isClosed
-                  ? "secondary"
-                  : isResolved
-                  ? "success"
-                  : urgency === "urgent"
-                  ? "destructive"
-                  : "outline"
-              }
+              className={className}
             >
-              {isClosed ? "closed" : isResolved ? "resolved" : row.original.urgency}
+              {urgencyLabel}
             </Badge>
           );
+        },
+      },
+      {
+        accessorKey: "urgency_score",
+        header: "Score",
+        size: 90,
+        cell: ({ row }) => {
+          const urgencyMeta = getUrgencyMeta(row.original);
+          return <span className="text-xs text-slate-600">{urgencyMeta.score.toFixed(2)}</span>;
         },
       },
       {
@@ -155,11 +178,8 @@ export default function DataListTable({ tweets, locations, requestTypes }) {
       }
       if (categoryFilter && t.request_type !== categoryFilter) return false;
       if (urgencyFilter) {
-        if (urgencyFilter.toLowerCase() === "closed") {
-          if (!t.is_closed) return false;
-        } else if (urgencyFilter.toLowerCase() === "resolved") {
-          if (!t.is_resolved || t.is_closed) return false;
-        } else if ((t.urgency || "").toLowerCase() !== urgencyFilter.toLowerCase()) {
+        const urgencyLabel = getUrgencyMeta(t).label;
+        if (urgencyLabel !== urgencyFilter.toLowerCase()) {
           return false;
         }
       }
@@ -223,10 +243,10 @@ export default function DataListTable({ tweets, locations, requestTypes }) {
           className="w-35 h-8 text-sm"
         >
           <option value="">All Urgency</option>
-          <option value="Urgent">Urgent</option>
-          <option value="Non-Urgent">Non-Urgent</option>
-          <option value="Resolved">Resolved</option>
-          <option value="Closed">Closed</option>
+          <option value="non-urgent">non-urgent</option>
+          <option value="potentially urgent">potentially urgent</option>
+          <option value="semi-urgent">semi-urgent</option>
+          <option value="urgent">urgent</option>
         </Select>
       </div>
 
