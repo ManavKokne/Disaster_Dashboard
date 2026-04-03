@@ -36,6 +36,7 @@ export default function DataListTable({ tweets, locations, requestTypes }) {
   const [locationFilter, setLocationFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [urgencyFilter, setUrgencyFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   const [sorting, setSorting] = useState([]);
 
   const columns = useMemo(
@@ -183,9 +184,23 @@ export default function DataListTable({ tweets, locations, requestTypes }) {
           return false;
         }
       }
+
+      if (statusFilter) {
+        const isClosed = Boolean(t.is_closed);
+        const isResolved = Boolean(t.is_resolved) && !isClosed;
+        const isAcknowledged =
+          Boolean(t.is_acknowledged) && !isClosed && !Boolean(t.is_resolved);
+        const isActive = !isClosed && !Boolean(t.is_resolved) && !Boolean(t.is_acknowledged);
+
+        if (statusFilter === "closed" && !isClosed) return false;
+        if (statusFilter === "resolved" && !isResolved) return false;
+        if (statusFilter === "acknowledged" && !isAcknowledged) return false;
+        if (statusFilter === "active" && !isActive) return false;
+      }
+
       return true;
     });
-  }, [tweets, locationFilter, categoryFilter, urgencyFilter]);
+  }, [tweets, locationFilter, categoryFilter, urgencyFilter, statusFilter]);
 
   const table = useReactTable({
     data: filteredData,
@@ -247,6 +262,17 @@ export default function DataListTable({ tweets, locations, requestTypes }) {
           <option value="potentially urgent">potentially urgent</option>
           <option value="semi-urgent">semi-urgent</option>
           <option value="urgent">urgent</option>
+        </Select>
+        <Select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="w-35 h-8 text-sm"
+        >
+          <option value="">All Status</option>
+          <option value="active">Active</option>
+          <option value="acknowledged">Acknowledged</option>
+          <option value="resolved">Resolved</option>
+          <option value="closed">Closed</option>
         </Select>
       </div>
 

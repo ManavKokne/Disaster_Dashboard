@@ -59,11 +59,11 @@ export default function ChartAlertStatus({ tweets }) {
     plugins: {
       legend: {
         display: true,
-        position: "right",
+        position: "bottom",
         labels: {
-          font: { size: 12 },
+          font: { size: 11 },
           color: "#64748b",
-          padding: 15,
+          padding: 10,
           usePointStyle: true,
         },
       },

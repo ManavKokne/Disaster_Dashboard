@@ -8,6 +8,11 @@ import ChartRequestType from "@/components/dashboard/ChartRequestType";
 import ChartAlertTimeline from "@/components/dashboard/ChartAlertTimeline";
 import ChartAlertStatus from "@/components/dashboard/ChartAlertStatus";
 import ChartUrgencyDistribution from "@/components/dashboard/ChartUrgencyDistribution";
+import ChartResolutionTimeByUrgency from "@/components/dashboard/ChartResolutionTimeByUrgency";
+import ChartClosureTimeByRequestType from "@/components/dashboard/ChartClosureTimeByRequestType";
+import ChartAlertAgingBuckets from "@/components/dashboard/ChartAlertAgingBuckets";
+import ChartAcknowledgementCoverage from "@/components/dashboard/ChartAcknowledgementCoverage";
+import ChartTopHotspotLocations from "@/components/dashboard/ChartTopHotspotLocations";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
@@ -67,6 +72,7 @@ export default function ChartsPage() {
     (tweet) => getUrgencyMeta(tweet).label === "urgent" && !tweet.is_closed && !tweet.is_resolved
   ).length;
   const resolvedCount = tweets.filter((t) => t.is_resolved && !t.is_closed).length;
+  const chartPanelHeight = "h-[19rem] sm:h-[20rem] md:h-[21rem] xl:h-[22rem]";
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-background">
@@ -118,10 +124,10 @@ export default function ChartsPage() {
             No data available
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3">
             <Card className="overflow-hidden border-slate-200 shadow-sm">
               <CardContent className="p-4 h-full">
-                <div className="w-full relative h-80 md:h-87.5 xl:h-90">
+                <div className={`w-full relative ${chartPanelHeight}`}>
                   <ChartRequestType tweets={tweets} />
                 </div>
               </CardContent>
@@ -129,15 +135,15 @@ export default function ChartsPage() {
 
             <Card className="overflow-hidden border-slate-200 shadow-sm">
               <CardContent className="p-4 h-full">
-                <div className="w-full relative h-80 md:h-87.5 xl:h-90">
+                <div className={`w-full relative ${chartPanelHeight}`}>
                   <div className="absolute top-1 right-1 z-20">
                     <Select
                       value={timelineMode}
                       onChange={(e) => setTimelineMode(e.target.value)}
-                      className="w-44 sm:w-52 h-8 text-xs bg-white/95 border-slate-300 shadow-sm"
+                      className="w-36 sm:w-44 h-8 text-xs bg-white/95 border-slate-300 shadow-sm"
                     >
-                      <option value="cumulative">Timeline: Cumulative</option>
-                      <option value="24h">Timeline: Last 24 Hours</option>
+                      <option value="cumulative">Cumulative</option>
+                      <option value="24h">Last 24 Hours</option>
                     </Select>
                   </div>
                   <ChartAlertTimeline tweets={tweets} mode={timelineMode} />
@@ -147,7 +153,7 @@ export default function ChartsPage() {
 
             <Card className="overflow-hidden border-slate-200 shadow-sm">
               <CardContent className="p-4 h-full">
-                <div className="w-full relative h-80 md:h-87.5 xl:h-90">
+                <div className={`w-full relative ${chartPanelHeight}`}>
                   <ChartAlertStatus tweets={tweets} />
                 </div>
               </CardContent>
@@ -155,8 +161,48 @@ export default function ChartsPage() {
 
             <Card className="overflow-hidden border-slate-200 shadow-sm">
               <CardContent className="p-4 h-full">
-                <div className="w-full relative h-80 md:h-87.5 xl:h-90">
+                <div className={`w-full relative ${chartPanelHeight}`}>
                   <ChartUrgencyDistribution tweets={tweets} />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="overflow-hidden border-slate-200 shadow-sm">
+              <CardContent className="p-4 h-full">
+                <div className={`w-full relative ${chartPanelHeight}`}>
+                  <ChartResolutionTimeByUrgency tweets={tweets} />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="overflow-hidden border-slate-200 shadow-sm">
+              <CardContent className="p-4 h-full">
+                <div className={`w-full relative ${chartPanelHeight}`}>
+                  <ChartClosureTimeByRequestType tweets={tweets} />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="overflow-hidden border-slate-200 shadow-sm">
+              <CardContent className="p-4 h-full">
+                <div className={`w-full relative ${chartPanelHeight}`}>
+                  <ChartAlertAgingBuckets tweets={tweets} />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="overflow-hidden border-slate-200 shadow-sm">
+              <CardContent className="p-4 h-full">
+                <div className={`w-full relative ${chartPanelHeight}`}>
+                  <ChartAcknowledgementCoverage tweets={tweets} />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="overflow-hidden border-slate-200 shadow-sm">
+              <CardContent className="p-4 h-full">
+                <div className={`w-full relative ${chartPanelHeight}`}>
+                  <ChartTopHotspotLocations tweets={tweets} />
                 </div>
               </CardContent>
             </Card>
