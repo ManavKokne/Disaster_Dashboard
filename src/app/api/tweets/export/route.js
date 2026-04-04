@@ -48,8 +48,10 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const filters = {
       location: searchParams.get("location") || "",
+      markerState: searchParams.get("markerState") || "all",
       requestType: searchParams.get("requestType") || "",
       acknowledgement: searchParams.get("acknowledgement") || "all",
+      alertSound: searchParams.get("alertSound") || "all",
       timeWindow: searchParams.get("timeWindow") || "all",
       urgencyLabels: parseUrgencyLabels(searchParams.get("urgencyLabels")),
       includeClosed: searchParams.get("includeClosed") === "1",

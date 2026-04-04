@@ -175,11 +175,29 @@ function matchesExportFilters(tweet, filters = {}) {
   if (acknowledgementFilter === "acknowledged" && !tweet.is_acknowledged) return false;
   if (acknowledgementFilter === "unacknowledged" && tweet.is_acknowledged) return false;
 
+  const alertSoundFilter = String(filters.alertSound || "all").toLowerCase();
+  if (alertSoundFilter === "sounding") {
+    const { label } = getUrgencyMeta(tweet);
+    const isSoundingAlert =
+      label === "urgent" &&
+      !tweet.is_acknowledged &&
+      !tweet.is_resolved &&
+      !tweet.is_closed;
+
+    if (!isSoundingAlert) return false;
+  }
+
+  const markerStateFilter = String(filters.markerState || "all").toLowerCase();
+  const isResolved = Boolean(tweet.is_resolved);
+  if (markerStateFilter === "resolved" && !isResolved) return false;
+  if (markerStateFilter === "active" && isResolved) return false;
+
   const normalizedUrgencyFilters = Array.isArray(filters.urgencyLabels)
     ? filters.urgencyLabels.map((value) => normalizeUrgencyLabel(value)).filter(Boolean)
     : [];
 
   if (normalizedUrgencyFilters.length > 0) {
+    if (isResolved) return false;
     const { label } = getUrgencyMeta(tweet);
     if (!normalizedUrgencyFilters.includes(label)) {
       return false;

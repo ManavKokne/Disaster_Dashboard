@@ -26,15 +26,19 @@ export default function DashboardPage() {
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   const [filterLocation, setFilterLocation] = useState("");
+  const [filterMarkerState, setFilterMarkerState] = useState("all");
   const [selectedUrgencyLabels, setSelectedUrgencyLabels] = useState([]);
   const [filterRequestType, setFilterRequestType] = useState("all");
   const [filterAcknowledgement, setFilterAcknowledgement] = useState("all");
+  const [filterAlertSound, setFilterAlertSound] = useState("all");
   const [filterTimeWindow, setFilterTimeWindow] = useState("all");
 
   const [draftFilterLocation, setDraftFilterLocation] = useState("");
+  const [draftFilterMarkerState, setDraftFilterMarkerState] = useState("all");
   const [draftSelectedUrgencyLabels, setDraftSelectedUrgencyLabels] = useState([]);
   const [draftFilterRequestType, setDraftFilterRequestType] = useState("all");
   const [draftFilterAcknowledgement, setDraftFilterAcknowledgement] = useState("all");
+  const [draftFilterAlertSound, setDraftFilterAlertSound] = useState("all");
   const [draftFilterTimeWindow, setDraftFilterTimeWindow] = useState("all");
 
   const pushToast = useCallback((message, tone = "info") => {
@@ -81,8 +85,10 @@ export default function DashboardPage() {
 
     return (
       filterLocation !== draftFilterLocation ||
+      filterMarkerState !== draftFilterMarkerState ||
       filterRequestType !== draftFilterRequestType ||
       filterAcknowledgement !== draftFilterAcknowledgement ||
+      filterAlertSound !== draftFilterAlertSound ||
       filterTimeWindow !== draftFilterTimeWindow ||
       appliedUrgency !== draftUrgency
     );
@@ -91,41 +97,53 @@ export default function DashboardPage() {
     draftSelectedUrgencyLabels,
     filterLocation,
     draftFilterLocation,
+    filterMarkerState,
+    draftFilterMarkerState,
     filterRequestType,
     draftFilterRequestType,
     filterAcknowledgement,
     draftFilterAcknowledgement,
+    filterAlertSound,
+    draftFilterAlertSound,
     filterTimeWindow,
     draftFilterTimeWindow,
   ]);
 
   const applyFilters = useCallback(() => {
     setFilterLocation(draftFilterLocation);
+    setFilterMarkerState(draftFilterMarkerState);
     setSelectedUrgencyLabels(draftSelectedUrgencyLabels);
     setFilterRequestType(draftFilterRequestType);
     setFilterAcknowledgement(draftFilterAcknowledgement);
+    setFilterAlertSound(draftFilterAlertSound);
     setFilterTimeWindow(draftFilterTimeWindow);
     pushToast("Filters applied", "success");
   }, [
     draftFilterLocation,
+    draftFilterMarkerState,
     draftSelectedUrgencyLabels,
     draftFilterRequestType,
     draftFilterAcknowledgement,
+    draftFilterAlertSound,
     draftFilterTimeWindow,
     pushToast,
   ]);
 
   const resetFilters = useCallback(() => {
     setDraftFilterLocation("");
+    setDraftFilterMarkerState("all");
     setDraftSelectedUrgencyLabels([]);
     setDraftFilterRequestType("all");
     setDraftFilterAcknowledgement("all");
+    setDraftFilterAlertSound("all");
     setDraftFilterTimeWindow("all");
 
     setFilterLocation("");
+    setFilterMarkerState("all");
     setSelectedUrgencyLabels([]);
     setFilterRequestType("all");
     setFilterAcknowledgement("all");
+    setFilterAlertSound("all");
     setFilterTimeWindow("all");
     pushToast("Filters reset", "info");
   }, [pushToast]);
@@ -140,7 +158,23 @@ export default function DashboardPage() {
     if (filterAcknowledgement === "acknowledged" && !tweet.is_acknowledged) return false;
     if (filterAcknowledgement === "unacknowledged" && tweet.is_acknowledged) return false;
 
+    if (filterAlertSound === "sounding") {
+      const { label } = getUrgencyMeta(tweet);
+      const isSoundingAlert =
+        label === "urgent" &&
+        !tweet.is_acknowledged &&
+        !tweet.is_resolved &&
+        !tweet.is_closed;
+
+      if (!isSoundingAlert) return false;
+    }
+
+    const isResolved = Boolean(tweet.is_resolved);
+    if (filterMarkerState === "resolved" && !isResolved) return false;
+    if (filterMarkerState === "active" && isResolved) return false;
+
     if (selectedUrgencyLabels.length > 0) {
+      if (isResolved) return false;
       const { label } = getUrgencyMeta(tweet);
       if (!selectedUrgencyLabels.includes(label)) return false;
     }
@@ -150,8 +184,10 @@ export default function DashboardPage() {
     return true;
   }, [
     filterLocation,
+    filterMarkerState,
     filterRequestType,
     filterAcknowledgement,
+    filterAlertSound,
     selectedUrgencyLabels,
     isWithinTimeWindow,
   ]);
@@ -198,9 +234,14 @@ export default function DashboardPage() {
     const baseCounts = URGENCY_LEVELS.reduce((accumulator, level) => {
       accumulator[level] = 0;
       return accumulator;
-    }, {});
+    }, { resolved: 0 });
 
     mapTweets.forEach((tweet) => {
+      if (tweet.is_resolved) {
+        baseCounts.resolved += 1;
+        return;
+      }
+
       const { label } = getUrgencyMeta(tweet);
       baseCounts[label] = (baseCounts[label] || 0) + 1;
     });
@@ -236,10 +277,12 @@ export default function DashboardPage() {
 
       const searchParams = new URLSearchParams();
       if (filterLocation) searchParams.set("location", filterLocation);
+      if (filterMarkerState !== "all") searchParams.set("markerState", filterMarkerState);
       if (filterRequestType !== "all") searchParams.set("requestType", filterRequestType);
       if (filterAcknowledgement !== "all") {
         searchParams.set("acknowledgement", filterAcknowledgement);
       }
+      if (filterAlertSound !== "all") searchParams.set("alertSound", filterAlertSound);
       if (filterTimeWindow !== "all") searchParams.set("timeWindow", filterTimeWindow);
       if (selectedUrgencyLabels.length > 0) {
         searchParams.set("urgencyLabels", selectedUrgencyLabels.join(","));
@@ -259,8 +302,10 @@ export default function DashboardPage() {
   }, [
     pushToast,
     filterLocation,
+    filterMarkerState,
     filterRequestType,
     filterAcknowledgement,
+    filterAlertSound,
     filterTimeWindow,
     selectedUrgencyLabels,
     triggerCsvDownload,
@@ -405,6 +450,8 @@ export default function DashboardPage() {
           locations={locations}
           filterLocation={draftFilterLocation}
           setFilterLocation={setDraftFilterLocation}
+          filterMarkerState={draftFilterMarkerState}
+          setFilterMarkerState={setDraftFilterMarkerState}
           selectedUrgencyLabels={draftSelectedUrgencyLabels}
           onToggleUrgencyLabel={toggleUrgencyLabel}
           filterRequestType={draftFilterRequestType}
@@ -412,6 +459,8 @@ export default function DashboardPage() {
           requestTypes={requestTypes}
           filterAcknowledgement={draftFilterAcknowledgement}
           setFilterAcknowledgement={setDraftFilterAcknowledgement}
+          filterAlertSound={draftFilterAlertSound}
+          setFilterAlertSound={setDraftFilterAlertSound}
           filterTimeWindow={draftFilterTimeWindow}
           setFilterTimeWindow={setDraftFilterTimeWindow}
           onApplyFilters={applyFilters}
