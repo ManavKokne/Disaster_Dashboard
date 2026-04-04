@@ -18,17 +18,7 @@ export default function ChartAlertStatus({ tweets }) {
     let closed = 0;
     let acknowledged = 0;
 
-    tweets.forEach((t) => {
-      if (t.is_closed) {
-        closed++;
-      } else if (t.is_resolved) {
-        resolved++;
-      } else if (t.is_acknowledged) {
-        acknowledged++;
-      } else {
-        active++;
-      }
-    });
+  
 
     return {
       labels: ["Active", "Acknowledged", "Resolved", "Closed"],
