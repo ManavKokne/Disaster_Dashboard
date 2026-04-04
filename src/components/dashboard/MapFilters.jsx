@@ -18,6 +18,8 @@ export default function MapFilters({
   requestTypes,
   filterAcknowledgement,
   setFilterAcknowledgement,
+  filterAlertSound,
+  setFilterAlertSound,
   filterTimeWindow,
   setFilterTimeWindow,
   onApplyFilters,
@@ -115,6 +117,17 @@ export default function MapFilters({
               <option value="all">All</option>
               <option value="acknowledged">Acknowledged</option>
               <option value="unacknowledged">Unacknowledged</option>
+            </Select>
+          </div>
+          <div>
+            <label className="text-[10px] text-slate-500 uppercase tracking-wide">Alert Sound</label>
+            <Select
+              value={filterAlertSound}
+              onChange={(e) => setFilterAlertSound(e.target.value)}
+              className="h-7 text-xs mt-0.5"
+            >
+              <option value="all">All</option>
+              <option value="sounding">Urgent + Unacknowledged</option>
             </Select>
           </div>
           <div>

@@ -51,6 +51,7 @@ export async function GET(request) {
       markerState: searchParams.get("markerState") || "all",
       requestType: searchParams.get("requestType") || "",
       acknowledgement: searchParams.get("acknowledgement") || "all",
+      alertSound: searchParams.get("alertSound") || "all",
       timeWindow: searchParams.get("timeWindow") || "all",
       urgencyLabels: parseUrgencyLabels(searchParams.get("urgencyLabels")),
       includeClosed: searchParams.get("includeClosed") === "1",

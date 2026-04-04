@@ -343,7 +343,7 @@ export default function MapContainer({
                   </button>
                 )}
 
-                {selectedUrgencyMeta?.label === "urgent" && !selectedTweet.is_resolved && !selectedTweet.is_acknowledged && (
+                {!selectedTweet.is_acknowledged && (
                   <button
                     onClick={() => onAcknowledge?.(selectedTweet.id)}
                     className="px-3 py-1.5 bg-amber-600 text-white text-xs rounded-md hover:bg-amber-700 transition-colors cursor-pointer"

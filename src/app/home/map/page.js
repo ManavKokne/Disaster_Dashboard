@@ -28,6 +28,7 @@ export default function MapPage() {
   const [selectedUrgencyLabels, setSelectedUrgencyLabels] = useState([]);
   const [filterRequestType, setFilterRequestType] = useState("all");
   const [filterAcknowledgement, setFilterAcknowledgement] = useState("all");
+  const [filterAlertSound, setFilterAlertSound] = useState("all");
   const [filterTimeWindow, setFilterTimeWindow] = useState("all");
 
   const [draftFilterLocation, setDraftFilterLocation] = useState("");
@@ -35,6 +36,7 @@ export default function MapPage() {
   const [draftSelectedUrgencyLabels, setDraftSelectedUrgencyLabels] = useState([]);
   const [draftFilterRequestType, setDraftFilterRequestType] = useState("all");
   const [draftFilterAcknowledgement, setDraftFilterAcknowledgement] = useState("all");
+  const [draftFilterAlertSound, setDraftFilterAlertSound] = useState("all");
   const [draftFilterTimeWindow, setDraftFilterTimeWindow] = useState("all");
 
   const pushToast = useCallback((message, tone = "info") => {
@@ -84,6 +86,7 @@ export default function MapPage() {
       filterMarkerState !== draftFilterMarkerState ||
       filterRequestType !== draftFilterRequestType ||
       filterAcknowledgement !== draftFilterAcknowledgement ||
+      filterAlertSound !== draftFilterAlertSound ||
       filterTimeWindow !== draftFilterTimeWindow ||
       appliedUrgency !== draftUrgency
     );
@@ -98,6 +101,8 @@ export default function MapPage() {
     draftFilterRequestType,
     filterAcknowledgement,
     draftFilterAcknowledgement,
+    filterAlertSound,
+    draftFilterAlertSound,
     filterTimeWindow,
     draftFilterTimeWindow,
   ]);
@@ -108,6 +113,7 @@ export default function MapPage() {
     setSelectedUrgencyLabels(draftSelectedUrgencyLabels);
     setFilterRequestType(draftFilterRequestType);
     setFilterAcknowledgement(draftFilterAcknowledgement);
+    setFilterAlertSound(draftFilterAlertSound);
     setFilterTimeWindow(draftFilterTimeWindow);
     pushToast("Filters applied", "success");
   }, [
@@ -116,6 +122,7 @@ export default function MapPage() {
     draftSelectedUrgencyLabels,
     draftFilterRequestType,
     draftFilterAcknowledgement,
+    draftFilterAlertSound,
     draftFilterTimeWindow,
     pushToast,
   ]);
@@ -126,6 +133,7 @@ export default function MapPage() {
     setDraftSelectedUrgencyLabels([]);
     setDraftFilterRequestType("all");
     setDraftFilterAcknowledgement("all");
+    setDraftFilterAlertSound("all");
     setDraftFilterTimeWindow("all");
 
     setFilterLocation("");
@@ -133,6 +141,7 @@ export default function MapPage() {
     setSelectedUrgencyLabels([]);
     setFilterRequestType("all");
     setFilterAcknowledgement("all");
+    setFilterAlertSound("all");
     setFilterTimeWindow("all");
     pushToast("Filters reset", "info");
   }, [pushToast]);
@@ -144,6 +153,17 @@ export default function MapPage() {
     if (filterRequestType !== "all" && (tweet.request_type || "") !== filterRequestType) return false;
     if (filterAcknowledgement === "acknowledged" && !tweet.is_acknowledged) return false;
     if (filterAcknowledgement === "unacknowledged" && tweet.is_acknowledged) return false;
+
+    if (filterAlertSound === "sounding") {
+      const { label } = getUrgencyMeta(tweet);
+      const isSoundingAlert =
+        label === "urgent" &&
+        !tweet.is_acknowledged &&
+        !tweet.is_resolved &&
+        !tweet.is_closed;
+
+      if (!isSoundingAlert) return false;
+    }
 
     const isResolved = Boolean(tweet.is_resolved);
     if (filterMarkerState === "resolved" && !isResolved) return false;
@@ -161,6 +181,7 @@ export default function MapPage() {
     filterMarkerState,
     filterRequestType,
     filterAcknowledgement,
+    filterAlertSound,
     selectedUrgencyLabels,
     isWithinTimeWindow,
   ]);
@@ -253,6 +274,7 @@ export default function MapPage() {
       if (filterAcknowledgement !== "all") {
         searchParams.set("acknowledgement", filterAcknowledgement);
       }
+      if (filterAlertSound !== "all") searchParams.set("alertSound", filterAlertSound);
       if (filterTimeWindow !== "all") searchParams.set("timeWindow", filterTimeWindow);
       if (selectedUrgencyLabels.length > 0) {
         searchParams.set("urgencyLabels", selectedUrgencyLabels.join(","));
@@ -275,6 +297,7 @@ export default function MapPage() {
     filterMarkerState,
     filterRequestType,
     filterAcknowledgement,
+    filterAlertSound,
     filterTimeWindow,
     selectedUrgencyLabels,
     triggerCsvDownload,
@@ -408,6 +431,8 @@ export default function MapPage() {
               requestTypes={requestTypes}
               filterAcknowledgement={draftFilterAcknowledgement}
               setFilterAcknowledgement={setDraftFilterAcknowledgement}
+              filterAlertSound={draftFilterAlertSound}
+              setFilterAlertSound={setDraftFilterAlertSound}
               filterTimeWindow={draftFilterTimeWindow}
               setFilterTimeWindow={setDraftFilterTimeWindow}
               onApplyFilters={applyFilters}
@@ -439,6 +464,8 @@ export default function MapPage() {
           requestTypes={requestTypes}
           filterAcknowledgement={draftFilterAcknowledgement}
           setFilterAcknowledgement={setDraftFilterAcknowledgement}
+          filterAlertSound={draftFilterAlertSound}
+          setFilterAlertSound={setDraftFilterAlertSound}
           filterTimeWindow={draftFilterTimeWindow}
           setFilterTimeWindow={setDraftFilterTimeWindow}
           onApplyFilters={applyFilters}
