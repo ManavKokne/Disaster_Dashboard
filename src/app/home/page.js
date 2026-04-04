@@ -26,12 +26,14 @@ export default function DashboardPage() {
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   const [filterLocation, setFilterLocation] = useState("");
+  const [filterMarkerState, setFilterMarkerState] = useState("all");
   const [selectedUrgencyLabels, setSelectedUrgencyLabels] = useState([]);
   const [filterRequestType, setFilterRequestType] = useState("all");
   const [filterAcknowledgement, setFilterAcknowledgement] = useState("all");
   const [filterTimeWindow, setFilterTimeWindow] = useState("all");
 
   const [draftFilterLocation, setDraftFilterLocation] = useState("");
+  const [draftFilterMarkerState, setDraftFilterMarkerState] = useState("all");
   const [draftSelectedUrgencyLabels, setDraftSelectedUrgencyLabels] = useState([]);
   const [draftFilterRequestType, setDraftFilterRequestType] = useState("all");
   const [draftFilterAcknowledgement, setDraftFilterAcknowledgement] = useState("all");
@@ -81,6 +83,7 @@ export default function DashboardPage() {
 
     return (
       filterLocation !== draftFilterLocation ||
+      filterMarkerState !== draftFilterMarkerState ||
       filterRequestType !== draftFilterRequestType ||
       filterAcknowledgement !== draftFilterAcknowledgement ||
       filterTimeWindow !== draftFilterTimeWindow ||
@@ -91,6 +94,8 @@ export default function DashboardPage() {
     draftSelectedUrgencyLabels,
     filterLocation,
     draftFilterLocation,
+    filterMarkerState,
+    draftFilterMarkerState,
     filterRequestType,
     draftFilterRequestType,
     filterAcknowledgement,
@@ -101,6 +106,7 @@ export default function DashboardPage() {
 
   const applyFilters = useCallback(() => {
     setFilterLocation(draftFilterLocation);
+    setFilterMarkerState(draftFilterMarkerState);
     setSelectedUrgencyLabels(draftSelectedUrgencyLabels);
     setFilterRequestType(draftFilterRequestType);
     setFilterAcknowledgement(draftFilterAcknowledgement);
@@ -108,6 +114,7 @@ export default function DashboardPage() {
     pushToast("Filters applied", "success");
   }, [
     draftFilterLocation,
+    draftFilterMarkerState,
     draftSelectedUrgencyLabels,
     draftFilterRequestType,
     draftFilterAcknowledgement,
@@ -117,12 +124,14 @@ export default function DashboardPage() {
 
   const resetFilters = useCallback(() => {
     setDraftFilterLocation("");
+    setDraftFilterMarkerState("all");
     setDraftSelectedUrgencyLabels([]);
     setDraftFilterRequestType("all");
     setDraftFilterAcknowledgement("all");
     setDraftFilterTimeWindow("all");
 
     setFilterLocation("");
+    setFilterMarkerState("all");
     setSelectedUrgencyLabels([]);
     setFilterRequestType("all");
     setFilterAcknowledgement("all");
@@ -140,7 +149,12 @@ export default function DashboardPage() {
     if (filterAcknowledgement === "acknowledged" && !tweet.is_acknowledged) return false;
     if (filterAcknowledgement === "unacknowledged" && tweet.is_acknowledged) return false;
 
+    const isResolved = Boolean(tweet.is_resolved);
+    if (filterMarkerState === "resolved" && !isResolved) return false;
+    if (filterMarkerState === "active" && isResolved) return false;
+
     if (selectedUrgencyLabels.length > 0) {
+      if (isResolved) return false;
       const { label } = getUrgencyMeta(tweet);
       if (!selectedUrgencyLabels.includes(label)) return false;
     }
@@ -150,6 +164,7 @@ export default function DashboardPage() {
     return true;
   }, [
     filterLocation,
+    filterMarkerState,
     filterRequestType,
     filterAcknowledgement,
     selectedUrgencyLabels,
@@ -198,9 +213,14 @@ export default function DashboardPage() {
     const baseCounts = URGENCY_LEVELS.reduce((accumulator, level) => {
       accumulator[level] = 0;
       return accumulator;
-    }, {});
+    }, { resolved: 0 });
 
     mapTweets.forEach((tweet) => {
+      if (tweet.is_resolved) {
+        baseCounts.resolved += 1;
+        return;
+      }
+
       const { label } = getUrgencyMeta(tweet);
       baseCounts[label] = (baseCounts[label] || 0) + 1;
     });
@@ -236,6 +256,7 @@ export default function DashboardPage() {
 
       const searchParams = new URLSearchParams();
       if (filterLocation) searchParams.set("location", filterLocation);
+      if (filterMarkerState !== "all") searchParams.set("markerState", filterMarkerState);
       if (filterRequestType !== "all") searchParams.set("requestType", filterRequestType);
       if (filterAcknowledgement !== "all") {
         searchParams.set("acknowledgement", filterAcknowledgement);
@@ -259,6 +280,7 @@ export default function DashboardPage() {
   }, [
     pushToast,
     filterLocation,
+    filterMarkerState,
     filterRequestType,
     filterAcknowledgement,
     filterTimeWindow,
@@ -405,6 +427,8 @@ export default function DashboardPage() {
           locations={locations}
           filterLocation={draftFilterLocation}
           setFilterLocation={setDraftFilterLocation}
+          filterMarkerState={draftFilterMarkerState}
+          setFilterMarkerState={setDraftFilterMarkerState}
           selectedUrgencyLabels={draftSelectedUrgencyLabels}
           onToggleUrgencyLabel={toggleUrgencyLabel}
           filterRequestType={draftFilterRequestType}

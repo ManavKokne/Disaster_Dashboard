@@ -54,7 +54,9 @@ function getUrgencyLabelClasses(label) {
   return "border-blue-200 bg-blue-50 text-blue-700";
 }
 
-function SeverityMarker({ onClick, color, isBlinking, isResolved }) {
+const RESOLVED_MARKER_COLOR = "#22c55e";
+
+function SeverityMarker({ onClick, color, isBlinking }) {
   return (
     <div
       className="cursor-pointer"
@@ -69,9 +71,7 @@ function SeverityMarker({ onClick, color, isBlinking, isResolved }) {
           />
         )}
         <div
-          className={`relative w-3.5 h-3.5 rounded-full border-2 border-white shadow-lg z-10 ${
-            isResolved ? "opacity-70" : "opacity-100"
-          }`}
+          className="relative w-3.5 h-3.5 rounded-full border-2 border-white shadow-lg z-10 opacity-100"
           style={{ backgroundColor: color }}
         />
       </div>
@@ -222,6 +222,7 @@ export default function MapContainer({
       {filteredTweets.map((tweet) => {
         const urgencyMeta = getUrgencyMeta(tweet);
         const isResolved = Boolean(tweet.is_resolved);
+        const markerColor = isResolved ? RESOLVED_MARKER_COLOR : urgencyMeta.color;
 
         return (
           <OverlayViewF
@@ -231,9 +232,8 @@ export default function MapContainer({
           >
             <SeverityMarker
               onClick={() => setSelectedTweetId(tweet.id)}
-              color={urgencyMeta.color}
+              color={markerColor}
               isBlinking={urgencyMeta.isBlinking && !isResolved && !tweet.is_closed}
-              isResolved={isResolved}
             />
           </OverlayViewF>
         );

@@ -2,6 +2,8 @@
 
 import { URGENCY_COLORS, URGENCY_LEVELS } from "@/lib/urgency";
 
+const RESOLVED_MARKER_COLOR = "#22c55e";
+
 export default function MapLegendCard({
   counts = {},
   totalVisible,
@@ -37,6 +39,13 @@ export default function MapLegendCard({
             </span>
           </div>
         ))}
+        <div className="flex items-center gap-2">
+          <div
+            className="w-3 h-3 rounded-full border border-white"
+            style={{ backgroundColor: RESOLVED_MARKER_COLOR }}
+          />
+          <span className="text-xs text-slate-600">resolved ({counts.resolved || 0})</span>
+        </div>
       </div>
       <p className="text-[10px] text-slate-400 mt-1.5">Showing {totalVisible} markers on map</p>
     </div>

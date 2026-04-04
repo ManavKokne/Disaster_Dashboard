@@ -9,6 +9,8 @@ export default function MapFilters({
   locations,
   filterLocation,
   setFilterLocation,
+  filterMarkerState,
+  setFilterMarkerState,
   selectedUrgencyLabels,
   onToggleUrgencyLabel,
   filterRequestType,
@@ -46,6 +48,18 @@ export default function MapFilters({
                   {loc}
                 </option>
               ))}
+            </Select>
+          </div>
+          <div>
+            <label className="text-[10px] text-slate-500 uppercase tracking-wide">Marker State</label>
+            <Select
+              value={filterMarkerState}
+              onChange={(e) => setFilterMarkerState(e.target.value)}
+              className="h-7 text-xs mt-0.5"
+            >
+              <option value="all">All</option>
+              <option value="active">Active</option>
+              <option value="resolved">Resolved (Green)</option>
             </Select>
           </div>
           <div>
