@@ -1,21 +1,21 @@
 const URGENCY_LEVELS = [
   "non-urgent",
   "potentially urgent",
-  "semi-urgent",
+  "likely urgent",
   "urgent",
 ];
 
 const URGENCY_COLORS = {
   "non-urgent": "#3b82f6",
   "potentially urgent": "#eab308",
-  "semi-urgent": "#f97316",
+  "likely urgent": "#f97316",
   urgent: "#dc2626",
 };
 
 const DEFAULT_SCORE_BY_LABEL = {
   "non-urgent": 0.1,
   "potentially urgent": 0.45,
-  "semi-urgent": 0.7,
+  "likely urgent": 0.7,
   urgent: 0.95,
 };
 
@@ -28,10 +28,13 @@ const LABEL_ALIASES = {
   "potentially urgent": "potentially urgent",
   "potentially-urgent": "potentially urgent",
   medium: "potentially urgent",
-  "semi urgent": "semi-urgent",
-  "semi-urgent": "semi-urgent",
-  "semiurgent": "semi-urgent",
-  high: "semi-urgent",
+  "semi urgent": "likely urgent",
+  "semi-urgent": "likely urgent",
+  "semiurgent": "likely urgent",
+  "likely urgent": "likely urgent",
+  "likely-urgent": "likely urgent",
+  likelyurgent: "likely urgent",
+  high: "likely urgent",
   urgent: "urgent",
   critical: "urgent",
 };
@@ -71,7 +74,7 @@ export function deriveUrgencyLabelFromScore(score) {
   if (!Number.isFinite(score)) return null;
 
   if (score >= 0.85) return "urgent";
-  if (score >= 0.6) return "semi-urgent";
+  if (score >= 0.6) return "likely urgent";
   if (score >= 0.35) return "potentially urgent";
   return "non-urgent";
 }

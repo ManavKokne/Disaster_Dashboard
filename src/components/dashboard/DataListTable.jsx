@@ -115,7 +115,7 @@ export default function DataListTable({ tweets, locations, requestTypes }) {
           let className = "";
           if (urgencyLabel === "urgent") {
             className = "bg-red-100 text-red-700";
-          } else if (urgencyLabel === "semi-urgent") {
+          } else if (urgencyLabel === "likely urgent") {
             className = "bg-orange-100 text-orange-700";
           } else if (urgencyLabel === "potentially urgent") {
             className = "bg-yellow-100 text-yellow-700";
@@ -260,7 +260,7 @@ export default function DataListTable({ tweets, locations, requestTypes }) {
           <option value="">All Urgency</option>
           <option value="non-urgent">non-urgent</option>
           <option value="potentially urgent">potentially urgent</option>
-          <option value="semi-urgent">semi-urgent</option>
+          <option value="likely urgent">likely urgent</option>
           <option value="urgent">urgent</option>
         </Select>
         <Select

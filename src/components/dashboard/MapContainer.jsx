@@ -49,7 +49,7 @@ function getCoordinatesKey(tweet) {
 
 function getUrgencyLabelClasses(label) {
   if (label === "urgent") return "border-red-200 bg-red-50 text-red-700";
-  if (label === "semi-urgent") return "border-orange-200 bg-orange-50 text-orange-700";
+  if (label === "likely urgent") return "border-orange-200 bg-orange-50 text-orange-700";
   if (label === "potentially urgent") return "border-yellow-200 bg-yellow-50 text-yellow-700";
   return "border-blue-200 bg-blue-50 text-blue-700";
 }
